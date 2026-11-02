@@ -132,6 +132,14 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .pimg.ini { font-size: 14px; } .bigimg.ini { font-size: 46px; } .tipimg.ini { font-size: 20px; }
 .credit { font-size: 11px; color: var(--muted); clear: both; }
 .credit a { color: inherit; }
+.st-line { fill: none; stroke: #5b8db8; stroke-width: 4; stroke-linecap: round; opacity: .75; pointer-events: none; }
+.st-route { fill: none; stroke-width: 3.2; stroke-linecap: round; pointer-events: none; filter: drop-shadow(0 0 2px var(--halo)); }
+.st-mark { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
+.st-star { fill: #e8b400; stroke: #5a3d00; stroke-width: 1.2; }
+.st-pulse { fill: none; stroke: #e8b400; stroke-width: 3; animation: stpulse 1.6s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes stpulse { from { transform: scale(.6); opacity: 1; } to { transform: scale(2.6); opacity: 0; } }
+.st-lab { font-size: 12px; font-weight: 700; fill: var(--ink); stroke: var(--halo); stroke-width: 3.5px; paint-order: stroke; pointer-events: none; }
+.st-lab.main { font-size: 14px; font-weight: 800; }
 .hm-edge { fill: none; stroke-width: .9; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; pointer-events: none; opacity: .55; }
 .hm-lab { font-family: var(--font-display); font-weight: 800; fill: var(--label); stroke: var(--halo); stroke-width: 3.5px; paint-order: stroke; text-anchor: middle; dominant-baseline: central; pointer-events: none; letter-spacing: .04em; }
 .hm-cap rect { fill: var(--panel); stroke: var(--ink); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
@@ -292,6 +300,21 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
   .lesson .hm { height: 62vh; order: -1; }
   .lesson-text { overflow: visible; }
 }
+.story h2 { font-size: 22px; }
+.st-dots { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 10px; }
+.st-dots button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); font-size: 11.5px; font-family: var(--font-data); padding: 0; }
+.st-dots button.past { background: var(--chip); }
+.st-dots button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.st-card { border: 1px solid var(--line); border-left: 5px solid #e8b400; border-radius: 10px; padding: 10px 12px; background: color-mix(in srgb, #e8b400 6%, var(--panel)); }
+.st-when { font-weight: 800; color: var(--accent); display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.st-place { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 13px; }
+.st-title { margin: 4px 0 4px !important; padding: 0 !important; border: 0 !important; font-size: 18px !important; }
+.st-people { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.st-people .pimg { width: 24px; height: 24px; margin-right: 4px; }
+.st-ctl { display: flex; gap: 6px; margin-top: 10px; }
+.st-ctl .btn { flex: 1; }
+.st-bar { height: 4px; background: var(--chip); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+.st-bar i { display: block; height: 100%; background: var(--accent); }
 .foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 18px; }
 </style>
 </head>
@@ -316,6 +339,7 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 <script src="js/data/lessons-sogo.js"></script>
 <script src="js/data/lessons-tankyu.js"></script>
 <script src="js/data/portraits.js"></script>
+<script src="js/data/stories.js"></script>
 <script src="js/geo.js"></script>
 <script src="js/core.js"></script>
 <script src="js/histmap.js"></script>

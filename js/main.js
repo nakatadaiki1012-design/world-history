@@ -1,6 +1,6 @@
 /* 画面の切りかえ（地図と年表／挑戦／授業モード）と、URL の # による直接リンク */
 const GROUPS = [
-  { id: 'see', name: '地図と年表', secs: [['map', '🗺 歴史地図'], ['chrono', '年表'], ['people', '人物図鑑']] },
+  { id: 'see', name: '地図と年表', secs: [['map', '🗺 歴史地図'], ['stories', '▶ できごとを追う'], ['chrono', '年表'], ['people', '人物図鑑']] },
   { id: 'try', name: '挑戦', secs: [['quiz', 'クイズ']] },
   { id: 'class', name: '授業<span class="lbl">モード</span>', secs: [['lessons/sogo', '歴史総合'], ['lessons/tankyu', '世界史探究']] }
 ];
@@ -16,7 +16,8 @@ function route() {
     const y = parseInt(parts[1], 10);
     params = { year: isFinite(y) ? fixYear(y) : undefined, view: GEO.VIEWS[parts[2]] ? parts[2] : undefined, sel: parts[3] };
   }
-  const secKey = id === 'lessons' ? `lessons/${params.course}` : id;
+  if (id === 'story') params = { story: parts[1], step: parseInt(parts[2], 10) || 1 };
+  const secKey = id === 'lessons' ? `lessons/${params.course}` : id === 'story' ? 'stories' : id;
   const own = GROUPS.find(g => g.secs.some(s => s[0] === secKey)) || GROUPS[0];
   const nav = $('#grpnav'); nav.innerHTML = '';
   GROUPS.forEach(g => {

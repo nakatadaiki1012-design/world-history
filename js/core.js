@@ -29,6 +29,8 @@ const PERSON = Object.fromEntries(PEOPLE.map(p => [p.id, p]));
 const EVENTS = (window.EVENTS || []).filter(e => e && e.title).sort((a, b) => a.year - b.year);
 const LESSONS = (window.LESSONS || []).filter(l => l && l.id);
 const PORTRAITS = window.PORTRAITS || {};
+const STORIES = (window.STORIES || []).filter(s => s && s.id && s.steps && s.steps.length);
+const STORY = Object.fromEntries(STORIES.map(s => [s.id, s]));
 const SPHERE_KIND = { tribute: '朝貢・冊封の範囲', suzerain: '宗主権・保護国', influence: '勢力範囲', bloc: '陣営・同盟', claim: '名目上の支配' };
 // 人物の肖像（ないときは頭文字のメダル）
 function portraitImg(p, cls = 'pimg') {

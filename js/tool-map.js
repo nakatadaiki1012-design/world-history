@@ -18,12 +18,13 @@ registerTool('map', {
 
     // アドレス（# のあと）を今の場面に。コピーして送れば同じ場面が開ける
     function syncHash() {
+      if (story) { history.replaceState(null, '', `#story/${story.id}/${si + 1}`); return; }
       const s = map.sel;
       const extra = !s ? '' : s.type === 'person' ? 'p:' + s.id : s.type === 'polity' ? 's:' + s.id : 'e:' + s.id;
       history.replaceState(null, '', mapHash(map.year, map.view, extra));
     }
 
-    const TABS = [['year', 'この年'], ['people', '人物'], ['events', '出来事'], ['help', '使い方']];
+    const TABS = [['year', 'この年'], ['people', '人物'], ['events', '出来事'], ['stories', '▶ 物語'], ['help', '使い方']];
     function renderTabs(detail) {
       tabs.innerHTML = '';
       if (detail) return;
@@ -41,14 +42,16 @@ registerTool('map', {
     }
     function renderSideNow() {
       const s = map.sel;
-      renderTabs(!!s);
+      renderTabs(!!s || !!story);
       body.innerHTML = '';
+      if (story) return storyPanel();
       if (s && s.type === 'polity' && POLITY[s.id]) return polityDetail(POLITY[s.id]);
       if (s && s.type === 'person' && PERSON[s.id]) return personDetail(PERSON[s.id]);
       if (s && s.type === 'event' && EVENTS[s.id]) return eventDetail(EVENTS[s.id]);
       if (tab === 'year') yearTab();
       else if (tab === 'people') peopleTab();
       else if (tab === 'events') eventsTab();
+      else if (tab === 'stories') storiesTab();
       else helpTab();
     }
 
@@ -247,8 +250,99 @@ registerTool('map', {
       }
     }
 
+    // --- 物語（1つのできごとを、地図を動かしながら順に追う） ---
+    let story = null, si = 0, playing = false, stTimer = null;
+    function storiesTab() {
+      const y = map.year;
+      body.appendChild(el(`<p class="muted" style="font-size:13px">1つのできごとを、地図を動かしながら順に追います。▶ をおすと自動で進みます。${esc(yearLabel(y))}に近いものから並んでいます。</p>`));
+      const ul = el('<ul class="lst"></ul>');
+      STORIES.slice().sort((a, b) => Math.abs(a.steps[0].year - y) - Math.abs(b.steps[0].year - y)).forEach(st => {
+        const li = el(`<li><button type="button"><span class="sw" style="background:${(REGION[st.region] || {}).color || '#555'}"></span><span><b>${esc(st.title)}</b><br><span class="muted" style="font-size:12px">${esc(st.period || '')}・${st.steps.length}場面</span></span></button></li>`);
+        li.firstChild.addEventListener('click', () => startStory(st, 0));
+        ul.appendChild(li);
+      });
+      body.appendChild(ul);
+    }
+    function startStory(st, i) {
+      story = st; playing = true; map.stop(); map.select(null);
+      goStep(i || 0, true);
+    }
+    function endStory() {
+      clearTimeout(stTimer); story = null; playing = false;
+      map.setStory(null); syncHash(); renderSide();
+    }
+    function goStep(i, first) {
+      clearTimeout(stTimer);
+      si = clamp(i, 0, story.steps.length - 1);
+      const s = story.steps[si];
+      map.setYear(s.year);
+      map.setStory(s);
+      map.flyTo(s.lon, s.lat, s.span || 6, first ? (story.view || REGION_VIEW[story.region]) : null);
+      syncHash(); renderSideNow();
+      if (playing) schedule();
+    }
+    function schedule() {
+      clearTimeout(stTimer);
+      const s = story.steps[si];
+      const ms = 5200 + (s.text || '').length * 45;
+      stTimer = setTimeout(() => { if (si < story.steps.length - 1) goStep(si + 1); else { playing = false; renderSideNow(); } }, ms);
+    }
+    function storyPanel() {
+      const s = story.steps[si];
+      const box = el(`<div class="story">
+        <button type="button" class="backlink">← 物語をおわる</button>
+        <div class="muted" style="font-size:12.5px">${esc(story.period || '')}</div>
+        <h2 style="margin-top:0">${esc(story.title)}</h2>
+        <div class="st-dots"></div>
+        <div class="st-card">
+          <div class="st-when"><span class="num">${esc(yearLabel(s.year))}</span>${s.date ? ' ' + esc(s.date) : ''}<span class="st-place">📍 ${esc(s.place || '')}</span></div>
+          <h3 class="st-title">${si + 1}．${esc(s.title)}</h3>
+          <p>${esc(s.text || '')}</p>
+          <div class="st-people"></div>
+        </div>
+        <div class="st-ctl">
+          <button type="button" class="btn" data-a="prev" ${si === 0 ? 'disabled' : ''}>◀ 前</button>
+          <button type="button" class="btn primary" data-a="play">${playing ? '❚❚ 止める' : '▶ 自動で進む'}</button>
+          <button type="button" class="btn" data-a="next" ${si === story.steps.length - 1 ? 'disabled' : ''}>次 ▶</button>
+        </div>
+        <div class="st-bar"><i style="width:${playing ? 0 : 100}%"></i></div>
+        ${si === 0 ? `<p class="muted" style="font-size:13.5px">${esc(story.summary || '')}</p>` : ''}
+        ${si === story.steps.length - 1 && !playing ? `<p style="font-weight:700">おわり。${esc(story.summary || '')}</p>` : ''}
+      </div>`);
+      $('.backlink', box).addEventListener('click', endStory);
+      const dots = $('.st-dots', box);
+      story.steps.forEach((x, k) => {
+        const d = el(`<button type="button" class="${k === si ? 'on' : k < si ? 'past' : ''}" title="${esc(x.title)}">${k + 1}</button>`);
+        d.addEventListener('click', () => goStep(k));
+        dots.appendChild(d);
+      });
+      const pe = $('.st-people', box);
+      (s.people || []).map(id => PERSON[id]).filter(Boolean).forEach(p => {
+        const b = el(`<button type="button" class="chip" style="padding:2px 10px 2px 3px">${portraitImg(p)}${esc(p.name)}</button>`);
+        b.addEventListener('click', () => { playing = false; clearTimeout(stTimer); story = null; map.setStory(null); map.select({ type: 'person', id: p.id }); });
+        pe.appendChild(b);
+      });
+      $$('.st-ctl button', box).forEach(b => b.addEventListener('click', () => {
+        const a = b.dataset.a;
+        if (a === 'prev') goStep(si - 1);
+        else if (a === 'next') goStep(si + 1);
+        else { playing = !playing; if (playing && si === story.steps.length - 1) goStep(0); else { if (playing) schedule(); else clearTimeout(stTimer); renderSideNow(); } }
+      }));
+      body.appendChild(box);
+      // 自動で進むまでの残り時間のバー
+      if (playing) { const bar = $('.st-bar i', box); const ms = 5200 + (s.text || '').length * 45; bar.style.transition = `width ${ms}ms linear`; requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = '100%'; })); }
+    }
+    const onKey = e => {
+      if (!story || /input|textarea|select/i.test(document.activeElement.tagName)) return;
+      if (e.key === 'ArrowRight') goStep(si + 1); else if (e.key === 'ArrowLeft') goStep(si - 1);
+      else if (e.key === ' ') { e.preventDefault(); $('.st-ctl [data-a=play]') && $('.st-ctl [data-a=play]').click(); }
+    };
+    document.addEventListener('keydown', onKey);
+
     // 最初にえらぶもの（URL から）
-    if (params.sel) {
+    if (params.story && STORY[params.story]) {
+      setTimeout(() => startStory(STORY[params.story], (params.step || 1) - 1), 150);
+    } else if (params.sel) {
       const [t, id] = params.sel.split(':');
       if (t === 'p' && PERSON[id]) { map.select({ type: 'person', id }); const pl = GEO.placeAt(PERSON[id], clamp(map.year, PERSON[id].born, PERSON[id].died)); if (pl && !params.view) map.focusOn(pl.lon, pl.lat); }
       else if (t === 's' && POLITY[id]) map.select({ type: 'polity', id });
@@ -257,6 +351,36 @@ registerTool('map', {
     } else renderSide();
     syncHash();
 
-    return () => { clearInterval(lifeTimer); clearTimeout(timer); map.destroy(); };
+    return () => { clearInterval(lifeTimer); clearTimeout(timer); clearTimeout(stTimer); document.removeEventListener('keydown', onKey); map.destroy(); };
   }
 });
+
+// 物語の一覧
+registerTool('stories', {
+  name: 'できごとを追う',
+  render(main) {
+    main.appendChild(el(`<div class="course-head"><h2>できごとを追う</h2><div class="muted" style="font-size:13.5px">1つのできごとを、地図を動かしながら順に追います。えらぶと地図が開き、自動で進みます（◀ ▶ で1場面ずつ）。</div></div>`));
+    const f = el('<div class="filters" style="max-width:980px;margin:0 auto 10px"></div>');
+    let c = '';
+    const grid = el('<div class="pgrid" style="max-width:980px;margin:0 auto"></div>');
+    [['', 'すべて'], ['sogo', '歴史総合'], ['tankyu', '世界史探究']].forEach(([k, n]) => {
+      const b = el(`<button type="button" class="chip" aria-pressed="${k === c}">${n}</button>`);
+      b.addEventListener('click', () => { c = k; $$('button', f).forEach(x => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true'); list(); });
+      f.appendChild(b);
+    });
+    function list() {
+      grid.innerHTML = '';
+      STORIES.filter(s => !c || (s.tags || []).includes(c)).forEach(s => {
+        const col = (REGION[s.region] || {}).color || '#555';
+        grid.appendChild(el(`<a class="pcard" style="--c:${col};text-decoration:none;color:inherit" href="#story/${esc(s.id)}/1">
+          <b>▶ ${esc(s.title)}</b>
+          <span class="m">${esc(s.period || '')}・${s.steps.length}場面・${esc((REGION[s.region] || {}).name || '')}</span>
+          <span class="t">${esc(s.summary || '')}</span>
+        </a>`));
+      });
+      if (!grid.children.length) grid.appendChild(el('<p class="empty">物語のデータがまだありません。</p>'));
+    }
+    main.appendChild(f); main.appendChild(grid); list();
+  }
+});
+registerTool('story', { name: '物語', render(main, params) { return TOOLS.map.render(main, params); } });

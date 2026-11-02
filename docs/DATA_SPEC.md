@@ -176,3 +176,40 @@ spheres: [
 `view`（地図の見る範囲）は次のどれか：
 `world` 世界全体 / `eastasia` 東アジア / `inner` 内陸アジア / `southasia` 南アジア / `seasia` 東南アジア /
 `westasia` 西アジア / `med` 地中海 / `europe` ヨーロッパ / `africa` アフリカ / `america` アメリカ / `atlantic` 大西洋世界
+
+## 5. 物語（STORIES）― 1つのできごとを地図で順に追う
+
+```js
+window.STORIES = (window.STORIES || []).concat([{
+  id: 'thirty-years-war',
+  title: '三十年戦争',
+  period: '1618〜1648年',
+  region: 'europe',
+  view: 'europe',                  // 地図の基本の範囲（VIEWS のキー）
+  tags: ['tankyu'],
+  summary: '全体のまとめ（2〜3文）',
+  steps: [                         // 6〜14 個。年の順
+    {
+      year: 1618, date: '5月23日',  // date は任意（月日・季節など）
+      title: 'プラハ窓外投擲事件',
+      text: '何が起き、だれが何をしたか（80〜160字）。',
+      place: 'プラハ', lon: 14.42, lat: 50.09,
+      span: 6,                     // 画面に入れる横の幅（経度で何度ぶん）。国全体 8〜15、地方 2〜5、都市とその周辺 0.3〜1
+      people: ['ferdinand-2'],     // 任意。js/data/people.js にある id だけ
+      polities: ['hre'],           // 任意。強調する国・王朝の id（polities-*.js にあるもの）
+      marks: [                     // 任意。地図に出す地点（★はこの場面の中心、ほかは ●）
+        { name: 'ヴァレンシュタイン軍', lon: 12.3, lat: 51.3 }
+      ],
+      routes: [                    // 任意。軍の進路・移動・航路（矢印つき）
+        { name: 'グスタフ=アドルフの進軍', color: '#1f5f8b', pts: [[13.4, 54.1], [13.4, 52.5], [12.4, 51.3]] }
+      ],
+      lines: [                     // 任意。矢印なしの線（川・前線・城壁など）。都市の場面で地形の手がかりに
+        { name: 'セーヌ川', pts: [[2.2, 48.83], [2.35, 48.85], [2.45, 48.82]] }
+      ]
+    }
+  ]
+}]);
+```
+
+- 都市の場面（パリのバスティーユ・ヴェルサイユなど）は `span: 0.3〜0.8` にし、`lines` で川（セーヌ川など）を、`marks` で場所を示す。
+- routes の色：攻める側・動く側の国の色に合わせる。

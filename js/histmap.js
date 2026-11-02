@@ -51,6 +51,7 @@ function createHistMap(host, opts = {}) {
   const gModern = gZoom.append('g');
   const gEdge = gZoom.append('g');
   const gOver = svg.append('g');   // 名前・点（拡大しても大きさが変わらない）
+  const gStory = gOver.append('g');
   const gTrail = gOver.append('g'), gLab = gOver.append('g'), gCap = gOver.append('g'), gEv = gOver.append('g'), gPeo = gOver.append('g');
   const uid = 'hm' + Math.random().toString(36).slice(2, 8);
   svg.append('defs').append('clipPath').attr('id', uid + 'pc').append('circle').attr('r', 11);
@@ -79,8 +80,11 @@ function createHistMap(host, opts = {}) {
   }
 
   // --- 拡大・移動 ---
-  const zoom = d3.zoom().scaleExtent([1, 12]).on('zoom', ev => {
+  const zoom = d3.zoom().scaleExtent([1, 400]).on('zoom', ev => {
     st.t = ev.transform; st.k = ev.transform.k;
+    if (ev.sourceEvent) st.cam = null;   // 自分で動かしたら、物語のカメラの目標は忘れる
+    // 都市の大きさまで拡大したら、国の色をうすくして地形の線を見やすく
+    gPol.style('opacity', st.k > 25 ? 0.45 : null);
     gZoom.attr('transform', ev.transform);
     placeOverlay();
   });
@@ -97,8 +101,9 @@ function createHistMap(host, opts = {}) {
     if (w === st.w && h === st.h) return;
     st.w = w; st.h = h;
     svg.attr('viewBox', `0 0 ${w} ${h}`);
-    zoom.extent([[0, 0], [w, h]]).translateExtent([[-w * 0.5, -h * 0.5], [w * 1.5, h * 1.5]]);
+    zoom.extent([[0, 0], [w, h]]).translateExtent([[-w * 0.6, -h * 0.6], [w * 1.6, h * 1.6]]);
     buildBase();
+    if (st.cam) { svg.interrupt(); flyTo(st.cam.lon, st.cam.lat, st.cam.span, null, 0); }
     draw();
   }
 
@@ -175,7 +180,8 @@ function createHistMap(host, opts = {}) {
       .attr('d', path)
       .attr('fill', f => f.properties.p.color || '#888')
       .attr('stroke', f => f.properties.p.color || '#888')
-      .classed('sel', f => sel && sel.type === 'polity' && sel.id === f.properties.p.id)
+      .classed('sel', f => (sel && sel.type === 'polity' && sel.id === f.properties.p.id) || (st.story && st.story.polities.includes(f.properties.p.id)))
+      .classed('dim', f => !!(st.story && st.story.polities.length && !st.story.polities.includes(f.properties.p.id)))
       .order();
     const es = gEdge.selectAll('path').data(feats, f => f.properties.p.id + '|' + f.properties.s.from);
     es.exit().remove();
@@ -183,14 +189,15 @@ function createHistMap(host, opts = {}) {
     gModern.style('display', st.layers.modern ? null : 'none');
 
     // 人物
-    shownPeople = st.layers.people ? PEOPLE.map(p => ({ p, pl: GEO.placeAt(p, y) })).filter(x => x.pl) : [];
+    shownPeople = st.story ? st.story.people.map(id => PERSON[id]).filter(Boolean).map(p => ({ p, pl: GEO.placeAt(p, clamp(y, p.born, p.died)) })).filter(x => x.pl)
+      : st.layers.people ? PEOPLE.map(p => ({ p, pl: GEO.placeAt(p, y) })).filter(x => x.pl) : [];
     if (sel && sel.type === 'person' && !shownPeople.some(x => x.p.id === sel.id)) {
       const p = PERSON[sel.id];
       if (p) { const pl = GEO.placeAt(p, clamp(y, p.born, p.died)); if (pl) shownPeople.push({ p, pl, ghost: true }); }
     }
     // 出来事（少し前までのものを、古いほどうすく）
     const win = y < -500 ? 60 : y < 1000 ? 25 : y < 1500 ? 15 : y < 1800 ? 8 : 4;
-    shownEvents = st.layers.events ? EVENTS.map((e, i) => ({ e, i })).filter(({ e }) => {
+    shownEvents = st.layers.events && !st.story ? EVENTS.map((e, i) => ({ e, i })).filter(({ e }) => {
       const end = e.end || e.year; return (y >= e.year && y <= end) || (y >= end && y - end <= win) || (y >= e.year && y - e.year <= win);
     }) : [];
     if (sel && sel.type === 'event' && !shownEvents.some(x => x.i === sel.id) && EVENTS[sel.id]) shownEvents.push({ e: EVENTS[sel.id], i: sel.id });
@@ -234,6 +241,9 @@ function createHistMap(host, opts = {}) {
     const isSelP = id => sel && sel.type === 'person' && sel.id === id;
     // 左上の大きな年と、右上のボタンの場所はあけておく
     boxes.push([0, 0, 190, 70], [W - 52, 0, W, 150], [0, H - 40, W, H]);
+
+    // 物語の地点・進路（名前の場所取りより先に）
+    const storyLabels = drawStory(boxes);
 
     // 人物の点（近すぎるものは輪のように広げる）
     const ppl = shownPeople.map(x => {
@@ -323,7 +333,10 @@ function createHistMap(host, opts = {}) {
       const w = textW(x.e.title, 11, false), h = 13;
       jobs.push({ pri: s ? 0 : 7, sub: x.age, run: () => { x.lab = tryPlace(side(x.sx, x.sy, 9, w, h, s)); } });
     });
+    storyLabels.forEach(m => jobs.push({ pri: m.main ? 0 : 1, sub: 0, run: () => { m.lab = tryPlace(side(m.x, m.y, m.main ? 13 : 7, textW(m.name, m.main ? 14 : 12, false), m.main ? 17 : 14, m.main)); } }));
     jobs.sort((a, b) => a.pri - b.pri || a.sub - b.sub).forEach(j => j.run());
+    gStory.selectAll('text.st-lab').data(storyLabels.filter(m => m.lab)).join('text').attr('class', d => 'st-lab' + (d.main ? ' main' : ''))
+      .attr('dominant-baseline', 'central').attr('x', d => d.x + d.lab.dx).attr('y', d => d.y + d.lab.dy).attr('text-anchor', d => d.lab.a).text(d => d.name);
 
     // --- 描く ---
     const ls = gLab.selectAll('text').data(labs, d => d.p.id);
@@ -428,6 +441,83 @@ function createHistMap(host, opts = {}) {
   function hideTip() { tip.hidden = true; }
   svg.on('click', () => { if (st.sel) select(null); });
 
+  // --- 物語：地点・進路・川などを描く（画面の座標で。拡大しても線の太さは同じ） ---
+  function drawStory(boxes) {
+    gStory.selectAll('*').remove();
+    const S = st.story; if (!S) return [];
+    const P = ll => { const q = pr(ll); return q ? st.t.apply(q) : null; };
+    const line = d3.line().curve(d3.curveCatmullRom.alpha(0.5));
+    (S.lines || []).forEach(l => {
+      const pts = l.pts.map(P).filter(Boolean); if (pts.length < 2) return;
+      gStory.append('path').attr('class', 'st-line').attr('d', line(pts));
+    });
+    (S.routes || []).forEach((r, i) => {
+      const pts = r.pts.map(P).filter(Boolean); if (pts.length < 2) return;
+      const c = r.color || '#8c2f39';
+      const mid = uid + 'ar' + i;
+      gStory.append('marker').attr('id', mid).attr('viewBox', '0 0 10 10').attr('refX', 7).attr('refY', 5).attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto-start-reverse')
+        .append('path').attr('d', 'M0,0L10,5L0,10z').attr('fill', c);
+      const pth = gStory.append('path').attr('class', 'st-route').attr('d', line(pts)).attr('stroke', c).attr('marker-end', `url(#${mid})`);
+      // 進路は少しずつのびる（地図が動いている間も続くように、時間で計算）
+      const pr0 = clamp((performance.now() - S.t0 - 700) / 2200, 0, 1);
+      if (pr0 < 1) {
+        const L = pth.node().getTotalLength();
+        pth.attr('stroke-dasharray', `${L} ${L}`).attr('stroke-dashoffset', L * (1 - d3.easeCubicInOut(pr0)));
+        if (pr0 === 0) pth.attr('marker-end', null);
+      }
+    });
+    const labels = [];
+    (S.marks || []).forEach(m => {
+      const q = P([m.lon, m.lat]); if (!q) return;
+      gStory.append('circle').attr('class', 'st-mark').attr('cx', q[0]).attr('cy', q[1]).attr('r', 5);
+      boxes.push([q[0] - 5, q[1] - 5, q[0] + 5, q[1] + 5]);
+      labels.push({ name: m.name, x: q[0], y: q[1] });
+    });
+    if (S.center) {
+      const q = P([S.center.lon, S.center.lat]);
+      if (q) {
+        gStory.append('circle').attr('class', 'st-pulse').attr('cx', q[0]).attr('cy', q[1]).attr('r', 10);
+        gStory.append('path').attr('class', 'st-star').attr('transform', `translate(${q[0]},${q[1]})`)
+          .attr('d', d3.symbol(d3.symbolStar, 260)());
+        boxes.push([q[0] - 10, q[1] - 10, q[0] + 10, q[1] + 10]);
+        if (S.center.name) labels.push({ name: S.center.name, x: q[0], y: q[1], main: true });
+      }
+    }
+    return labels;
+  }
+  function setStory(step) {
+    if (!step) { st.story = null; draw(); return; }
+    st.story = {
+      center: { lon: step.lon, lat: step.lat, name: step.place },
+      marks: step.marks || [], routes: step.routes || [], lines: step.lines || [],
+      people: step.people || [], polities: step.polities || [], t0: performance.now()
+    };
+    draw();
+    const S = st.story;
+    (function tick() { if (st.story !== S) return; placeOverlay(); if (performance.now() - S.t0 < 3000) requestAnimationFrame(tick); })();
+  }
+  // その地点を中心に、横 span 度ぶんが入るように拡大して移動
+  function flyTo(lon, lat, span, view, dur = 1500) {
+    if (view && GEO.VIEWS[view] && view !== st.view) setView(view);
+    st.cam = { lon, lat, span };
+    const q = pr([lon, lat]);
+    if (!q) { setView('world'); return; }
+    const a = pr([lon - span / 2, lat]), b = pr([lon + span / 2, lat]);
+    const d = a && b ? Math.hypot(b[0] - a[0], b[1] - a[1]) : st.w;
+    const k = clamp(st.w * 0.85 / Math.max(d, 1e-6), 1, 400);
+    const tt = d3.zoomIdentity.translate(st.w / 2 - k * q[0], st.h / 2 - k * q[1]).scale(k);
+    // 大きく動くときは、いったん引いてから寄る（どこへ動いたかわかるように）
+    const far = Math.abs(Math.log(k / st.t.k)) > 1.5 || Math.hypot(st.t.applyX(q[0]) - st.w / 2, st.t.applyY(q[1]) - st.h / 2) > st.w * 0.6;
+    if (far && dur > 0) {
+      const k1 = Math.max(1, Math.min(st.t.k, k) / 3);
+      const mid = [ (st.t.invertX(st.w / 2) + q[0]) / 2, (st.t.invertY(st.h / 2) + q[1]) / 2 ];
+      const t1 = d3.zoomIdentity.translate(st.w / 2 - k1 * mid[0], st.h / 2 - k1 * mid[1]).scale(k1);
+      svg.interrupt().transition().duration(dur * 0.45).ease(d3.easeCubicInOut).call(zoom.transform, t1)
+        .transition().duration(dur * 0.55).ease(d3.easeCubicInOut).call(zoom.transform, tt);
+    } else if (dur > 0) svg.interrupt().transition().duration(dur).ease(d3.easeCubicInOut).call(zoom.transform, tt);
+    else svg.call(zoom.transform, tt);
+  }
+
   function select(s) {
     st.sel = s;
     draw();
@@ -530,7 +620,7 @@ function createHistMap(host, opts = {}) {
     get year() { return st.year; },
     get view() { return st.view; },
     get sel() { return st.sel; },
-    setYear, setView, select, focusOn, stop,
+    setYear, setView, select, focusOn, stop, setStory, flyTo,
     polities: () => feats.map(f => f.properties.p),
     visiblePolities() {
       if (!pr) return [];
