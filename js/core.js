@@ -43,6 +43,57 @@ const LESSONS = (window.LESSONS || []).filter(l => l && l.id);
 const PORTRAITS = window.PORTRAITS || {};
 const STORIES = (window.STORIES || []).filter(s => s && s.id && s.steps && s.steps.length);
 const STORY = Object.fromEntries(STORIES.map(s => [s.id, s]));
+
+// --- 画像資料（ウィキメディア・コモンズから読みこむ。ネットにつながっていないときは出さない） ---
+const IMAGES = {};
+(window.IMAGES || []).forEach(m => { if (m && m.key && m.file) (IMAGES[m.key] = IMAGES[m.key] || []).push(m); });
+const commonsUrl = (file, w) => `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file.replace(/ /g, '_'))}?width=${w}`;
+function figureHtml(key, max = 1) {
+  const ms = (IMAGES[key] || []).slice(0, max);
+  return ms.map(m => `<figure class="fig"><img src="${esc(commonsUrl(m.file, 480))}" data-big="${esc(commonsUrl(m.file, 1400))}" alt="${esc(m.what || '')}" loading="lazy" onerror="this.closest('figure').remove()">
+    <figcaption>${esc(m.what || '')}<span class="credit">${m.artist ? esc(m.artist) + '・' : ''}${esc(m.license || '')}・<a href="${esc(m.page || '#')}" target="_blank" rel="noopener">コモンズ</a></span></figcaption></figure>`).join('');
+}
+// 画像をおすと大きく
+document.addEventListener('click', e => {
+  const img = e.target.closest('.fig img');
+  if (!img) return;
+  const ov = el(`<div class="lightbox" role="dialog" aria-label="画像を大きく"><img src="${esc(img.dataset.big || img.src)}" alt=""><div class="cap">${img.closest('figure').querySelector('figcaption').innerHTML}</div></div>`);
+  ov.addEventListener('click', ev => { if (!ev.target.closest('a')) ov.remove(); });
+  document.body.appendChild(ov);
+});
+
+// --- 原因と結果 ---
+const EVENT_IDX = Object.fromEntries(EVENTS.map((e, i) => [e.title, i]));
+const CAUSES = (window.CAUSES || []).filter(c => c && EVENT_IDX[c.from] != null && EVENT_IDX[c.to] != null);
+const STORY_CAUSES = window.STORY_CAUSES || {};
+const CAUSE_KIND = { background: '背景', cause: '原因', trigger: 'きっかけ', result: '結果' };
+const causesOf = i => CAUSES.filter(c => c.to === EVENTS[i].title).map(c => ({ i: EVENT_IDX[c.from], kind: c.kind, why: c.why }));
+const resultsOf = i => CAUSES.filter(c => c.from === EVENTS[i].title).map(c => ({ i: EVENT_IDX[c.to], kind: c.kind, why: c.why }));
+// 出来事から原因をさかのぼって、地図でたどれる「物語」を作る
+function spanForEvent(e) { return e.kind === 'war' ? 14 : 10; }
+function eventStep(i, why) {
+  const e = EVENTS[i];
+  return { year: e.year, title: e.title, text: e.text || '', place: e.place, lon: e.lon, lat: e.lat, span: spanForEvent(e), why, imageKey: 'event:' + e.title, eventIdx: i };
+}
+function chainStory(target, depth = 3, max = 9) {
+  const seen = new Map([[target, null]]);
+  let frontier = [target];
+  for (let d = 0; d < depth && seen.size < max; d++) {
+    const next = [];
+    frontier.forEach(i => causesOf(i).sort((a, b) => ({ trigger: 0, cause: 1, background: 2, result: 3 }[a.kind] - { trigger: 0, cause: 1, background: 2, result: 3 }[b.kind]))
+      .forEach(c => { if (!seen.has(c.i) && seen.size < max) { seen.set(c.i, { to: i, kind: c.kind, why: c.why }); next.push(c.i); } }));
+    frontier = next;
+  }
+  const order = [...seen.keys()].sort((a, b) => EVENTS[a].year - EVENTS[b].year || (a === target ? 1 : b === target ? -1 : 0));
+  const steps = order.map(i => {
+    const l = seen.get(i);
+    return eventStep(i, l ? `${CAUSE_KIND[l.kind] || '原因'} → 「${EVENTS[l.to].title}」：${l.why}` : '');
+  });
+  const e = EVENTS[target];
+  return { id: 'chain:' + target, title: `なぜ「${e.title}」は起きた？`, period: `${yearLabel(EVENTS[order[0]].year)}〜${yearLabel(e.year)}`, region: e.region,
+    view: REGION_VIEW_OF[e.region] || 'world', summary: `「${e.title}」の背景・原因・きっかけを、古い順にたどります。`, steps, generated: true };
+}
+const REGION_VIEW_OF = { east: 'eastasia', inner: 'inner', south: 'southasia', sea: 'seasia', west: 'westasia', europe: 'europe', africa: 'africa', america: 'america', oceania: 'world' };
 const SPHERE_KIND = { tribute: '朝貢・冊封の範囲', suzerain: '宗主権・保護国', influence: '勢力範囲', bloc: '陣営・同盟', claim: '名目上の支配' };
 // 人物の肖像（ないときは頭文字のメダル）
 function portraitImg(p, cls = 'pimg') {

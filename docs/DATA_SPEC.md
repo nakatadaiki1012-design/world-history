@@ -213,3 +213,35 @@ window.STORIES = (window.STORIES || []).concat([{
 
 - 都市の場面（パリのバスティーユ・ヴェルサイユなど）は `span: 0.3〜0.8` にし、`lines` で川（セーヌ川など）を、`marks` で場所を示す。
 - routes の色：攻める側・動く側の国の色に合わせる。
+
+## 6. 原因と結果（CAUSES）― 「なぜ起きた？」をたどる
+
+出来事どうしを「原因 → 結果」でつなぐ。出来事は `EVENTS` の `title`（完全に同じ文字列）で指す。
+EVENTS にない原因が必要なときは、同じファイルで `window.EVENTS` に足してよい（書き方は 3. と同じ）。
+
+```js
+window.CAUSES = (window.CAUSES || []).concat([
+  { from: '大陸封鎖令', to: 'ロシア遠征', kind: 'trigger', why: 'ロシアが大陸封鎖令を破ってイギリスと貿易を再開したため、ナポレオンは遠征を決めた。' },
+  { from: '七年戦争', to: 'アメリカ独立戦争', kind: 'background', why: '…' }
+]);
+```
+
+- `kind`：`background` 背景・遠因（長い時間かけて条件をつくった）／`cause` 原因／`trigger` きっかけ（直接の引き金）／`result` 結果・影響（from が to をもたらした、と書きにくいときの補助。ふつうは cause でよい）
+- `why`：なぜつながるのかを 1〜2 文（40〜100 字）。教科書の説明に合わせる。
+- 物語（STORIES）には `causes: ['出来事の title', …]`（その物語の背景・原因）と `results: [...]`（その後への影響）をつけてよい。
+
+## 7. 画像資料（IMAGES）
+
+肖像以外の画像資料（絵画・写真・地図・遺物・史料）。ウィキメディア・コモンズの、自由に使えるもの（Public domain・CC0・CC BY・CC BY-SA）だけ。
+
+```js
+window.IMAGES = (window.IMAGES || []).concat([
+  { key: 'story:french-revolution:2',   // 物語の場面（id と 1 から数えた場面の番号）／ 'event:<title>' ／ 'polity:<id>' ／ 'person:<id>'
+    file: 'Prise_de_la_Bastille.jpg',      // コモンズのファイル名
+    what: 'ウエル「バスティーユ襲撃」（1789年）',  // 何の画像か（短い日本語）
+    artist: 'Jean-Pierre Houël', license: 'Public domain',
+    page: 'https://commons.wikimedia.org/wiki/File:Prise_de_la_Bastille.jpg' }
+]);
+```
+
+アプリは `https://commons.wikimedia.org/wiki/Special:FilePath/<file>?width=480` で読みこむ（インターネットが必要）。

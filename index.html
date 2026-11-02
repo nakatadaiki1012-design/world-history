@@ -160,6 +160,18 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .hm-yearbig small { display: block; font-family: var(--font-body); font-size: 13px; font-weight: 700; color: var(--muted); margin-top: 4px; }
 .hm-tools { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 4px; }
 .hm-tools button { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); font-weight: 800; font-size: 17px; line-height: 1; }
+.hm-tools .gear { font-size: 16px; }
+.hm-tools .gear[aria-expanded="true"] { background: var(--ink); color: var(--panel); }
+.hm-set { position: absolute; right: 50px; top: 8px; z-index: 6; width: 236px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 6px 22px rgba(0,0,0,.22); padding: 8px 12px 10px; font-size: 13.5px; max-height: calc(100% - 16px); overflow-y: auto; }
+.hm-set-h { display: flex; justify-content: space-between; align-items: center; font-weight: 800; margin-bottom: 2px; }
+.hm-set-h .x { border: 0; background: none; font-size: 15px; padding: 2px 4px; }
+.hm-set-g { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 6px; display: grid; gap: 3px; }
+.hm-set-g b { font-size: 12px; color: var(--muted); }
+.hm-set label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.hm-set input { accent-color: var(--accent); width: 16px; height: 16px; }
+.hm-speed { display: flex; gap: 4px; }
+.hm-speed button { flex: 1; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 3px 0; font-family: var(--font-data); }
+.hm-speed button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .hm-views { position: absolute; left: 8px; bottom: 8px; right: 50px; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .hm-views::-webkit-scrollbar { display: none; }
 .hm-views .chip { box-shadow: 0 1px 2px rgba(0,0,0,.1); }
@@ -315,6 +327,25 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .st-ctl .btn { flex: 1; }
 .st-bar { height: 4px; background: var(--chip); border-radius: 2px; margin-top: 6px; overflow: hidden; }
 .st-bar i { display: block; height: 100%; background: var(--accent); }
+.fig { margin: 8px 0; }
+.fig img { display: block; width: 100%; max-height: 240px; object-fit: contain; background: var(--chip); border-radius: 8px; cursor: zoom-in; border: 1px solid var(--line); }
+.fig figcaption { font-size: 12.5px; margin-top: 3px; }
+.fig .credit { display: block; font-size: 11px; color: var(--muted); }
+.fig .credit a { color: inherit; }
+.lightbox { position: fixed; inset: 0; z-index: 100; background: rgba(10,8,5,.86); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; cursor: zoom-out; }
+.lightbox img { max-width: 100%; max-height: calc(100% - 70px); object-fit: contain; border-radius: 6px; }
+.lightbox .cap { color: #f3eee2; font-size: 14px; margin-top: 8px; text-align: center; }
+.lightbox .cap .credit { color: #c9c1b0; font-size: 12px; display: block; }
+.lightbox .cap a { color: inherit; }
+.why { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 4px; }
+.why li button { width: 100%; text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 9px; padding: 6px 9px; font-size: 13.5px; }
+.why li button:hover { background: var(--chip); }
+.why .k { display: inline-block; font-size: 11px; font-weight: 800; border-radius: 4px; padding: 0 5px; margin-right: 5px; color: #fff; }
+.why .k.background { background: #7d6e57; } .why .k.cause { background: #b9770e; } .why .k.trigger { background: #c0392b; } .why .k.result { background: #1f4e79; }
+.why .w { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.why .y { float: right; font-family: var(--font-data); font-size: 12px; color: var(--muted); }
+.st-why { margin-top: 8px; padding: 6px 9px; border-radius: 8px; background: color-mix(in srgb, var(--ai) 10%, var(--panel)); font-size: 13px; }
+.chainbtn { margin: 6px 0; }
 .foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 18px; }
 </style>
 </head>
@@ -336,10 +367,12 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 <script src="js/data/polities-modern.js"></script>
 <script src="js/data/people.js"></script>
 <script src="js/data/events.js"></script>
+<script src="js/data/causes.js"></script>
 <script src="js/data/lessons-sogo.js"></script>
 <script src="js/data/lessons-tankyu.js"></script>
 <script src="js/data/portraits.js"></script>
 <script src="js/data/stories.js"></script>
+<script src="js/data/images.js"></script>
 <script src="js/geo.js"></script>
 <script src="js/core.js"></script>
 <script src="js/histmap.js"></script>

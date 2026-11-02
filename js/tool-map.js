@@ -18,7 +18,8 @@ registerTool('map', {
 
     // アドレス（# のあと）を今の場面に。コピーして送れば同じ場面が開ける
     function syncHash() {
-      if (story) { history.replaceState(null, '', `#story/${story.id}/${si + 1}`); return; }
+      if (story && !story.generated) { history.replaceState(null, '', `#story/${story.id}/${si + 1}`); return; }
+      if (story) { history.replaceState(null, '', mapHash(map.year, map.view)); return; }
       const s = map.sel;
       const extra = !s ? '' : s.type === 'person' ? 'p:' + s.id : s.type === 'polity' ? 's:' + s.id : 'e:' + s.id;
       history.replaceState(null, '', mapHash(map.year, map.view, extra));
@@ -126,8 +127,8 @@ registerTool('map', {
       body.appendChild(el(`<div>
         <h2>使い方</h2>
         <p><b>下のツマミ</b>を左右に動かすと年が変わり、地図の国・王朝、都（■）、人物（●）、出来事（◆）が変わります。</p>
-        <p><b>斜線（▨）</b>は、直接は支配していないが影響がおよんだ範囲（朝貢・冊封、宗主権、勢力範囲、陣営）です。「勢力圏」で表示を切りかえられます。</p>
-        <p><b>▶</b> で自動で年が進みます。「速さ」で速さを変えられます。右はしの年をおすと、年を入力できます（例：<span class="num">前221</span>、<span class="num">1453</span>）。</p>
+        <p><b>斜線（▨）</b>は、直接は支配していないが影響がおよんだ範囲（朝貢・冊封、宗主権、勢力範囲、陣営）です。右上の <b>⚙</b>（表示の設定）で、勢力圏・都・人物・出来事・現在の国境を出す／出さないや、再生の速さを変えられます。</p>
+        <p><b>▶</b> で自動で年が進みます。右はしの年をおすと、年を入力できます（例：<span class="num">前221</span>、<span class="num">1453</span>）。</p>
         <p>地図の<b>色のついた国・王朝</b>や<b>人物</b>をおすと、右に説明が出ます。人物をえらぶと、一生の<b>足あと</b>が点線で出ます。</p>
         <p>左下のボタンで<b>見る範囲</b>（東アジア・西アジア など）を切りかえ。指２本やマウスのホイールで拡大できます。</p>
         <p>アドレス（URL）に今の年と範囲が入るので、コピーして送ると同じ場面を開けます。</p>
@@ -146,6 +147,34 @@ registerTool('map', {
       b.addEventListener('click', () => map.select(null));
       return b;
     }
+    // 「なぜ起きた？」と「その結果」
+    function whyList(items, dir) {
+      const ul = el('<ul class="why"></ul>');
+      items.sort((a, b) => EVENTS[a.i].year - EVENTS[b.i].year).forEach(c => {
+        const e = EVENTS[c.i];
+        const li = el(`<li><button type="button"><span class="y">${esc(yearLabel(e.year))}</span><span class="k ${esc(c.kind)}">${esc(dir === 'up' ? (CAUSE_KIND[c.kind] || '原因') : '結果')}</span><b>${esc(e.title)}</b><span class="w">${esc(c.why || '')}</span></button></li>`);
+        li.firstChild.addEventListener('click', () => { if (story) endStory(); map.setYear(e.year); map.select({ type: 'event', id: c.i }); map.flyTo(e.lon, e.lat, spanForEvent(e)); });
+        ul.appendChild(li);
+      });
+      return ul;
+    }
+    function whySection(idx) {
+      if (idx == null) return;
+      const cs = causesOf(idx), rs = resultsOf(idx);
+      if (cs.length) {
+        body.appendChild(el('<h3>なぜ起きた？</h3>'));
+        body.appendChild(whyList(cs, 'up'));
+        const b = el('<button type="button" class="btn primary chainbtn">▶ 原因をさかのぼって地図でたどる</button>');
+        b.addEventListener('click', () => startStory(chainStory(idx), 0));
+        body.appendChild(b);
+      }
+      if (rs.length) {
+        body.appendChild(el('<h3>その結果・影響</h3>'));
+        body.appendChild(whyList(rs, 'down'));
+      }
+      if (!cs.length && !rs.length) body.appendChild(el('<p class="muted" style="font-size:13px">この出来事の原因・結果のつながりは、まだデータにありません。</p>'));
+    }
+
     function polityDetail(p) {
       body.appendChild(back());
       const reg = REGION[p.region];
@@ -157,6 +186,7 @@ registerTool('map', {
         <p>${esc(p.text || '')}</p>
         ${p.keys && p.keys.length ? `<div class="keys">${p.keys.map(k => `<span>${esc(k)}</span>`).join('')}</div>` : ''}
         ${p.tags ? `<div class="muted" style="font-size:12.5px">${p.tags.map(t => COURSE[t]).filter(Boolean).join('・')}</div>` : ''}
+        ${figureHtml('polity:' + p.id, 2)}
       </div>`));
       body.appendChild(jumpBtns([
         [`⏮ はじまり（${esc(yearLabel(p.start))}）`, () => map.setYear(p.start)],
@@ -201,6 +231,7 @@ registerTool('map', {
         ${p.keys && p.keys.length ? `<div class="keys">${p.keys.map(k => `<span>${esc(k)}</span>`).join('')}</div>` : ''}
         ${ph ? `<div class="credit">肖像：${esc(ph.what || '')}${ph.artist ? '（' + esc(ph.artist) + '）' : ''}・${esc(ph.license || '')}・<a href="${esc(ph.page || '#')}" target="_blank" rel="noopener">ウィキメディア・コモンズ</a></div>` : ''}
       </div>`));
+      if (IMAGES['person:' + p.id]) body.appendChild(el(`<div>${figureHtml('person:' + p.id, 2)}</div>`));
       const pairs = [[`⏮ 生まれた年`, () => map.setYear(p.born)], [`⏭ 亡くなった年`, () => map.setYear(p.died)]];
       pairs.push([`▶ 一生をたどる`, () => playLife(p)]);
       if (pol) pairs.push([`${esc(pol.name)}を見る`, () => map.select({ type: 'polity', id: pol.id })]);
@@ -241,7 +272,10 @@ registerTool('map', {
         <div class="num" style="font-weight:700">${esc(yearLabel(e.year))}${e.end && e.end !== e.year ? '〜' + esc(yearLabel(e.end)) : ''}　<span style="font-family:var(--font-body);font-weight:500">${esc(e.place || '')}</span></div>
         <p>${esc(e.text || '')}</p>
       </div>`));
+      const idx = EVENT_IDX[e.title];
+      body.appendChild(el(`<div>${figureHtml('event:' + e.title)}</div>`));
       body.appendChild(jumpBtns([[`この年へ（${esc(yearLabel(e.year))}）`, () => map.setYear(e.year)]]));
+      whySection(idx);
       // その年に生きていた、近くの人物
       const near = PEOPLE.map(p => ({ p, pl: GEO.placeAt(p, e.year) })).filter(x => x.pl && d3.geoDistance([x.pl.lon, x.pl.lat], [e.lon, e.lat]) < 0.25);
       if (near.length) {
@@ -297,7 +331,9 @@ registerTool('map', {
         <div class="st-card">
           <div class="st-when"><span class="num">${esc(yearLabel(s.year))}</span>${s.date ? ' ' + esc(s.date) : ''}<span class="st-place">📍 ${esc(s.place || '')}</span></div>
           <h3 class="st-title">${si + 1}．${esc(s.title)}</h3>
+          ${figureHtml(s.imageKey || `story:${story.id}:${si + 1}`)}
           <p>${esc(s.text || '')}</p>
+          ${s.why ? `<div class="st-why">🔗 ${esc(s.why)}</div>` : ''}
           <div class="st-people"></div>
         </div>
         <div class="st-ctl">
@@ -310,6 +346,24 @@ registerTool('map', {
         ${si === story.steps.length - 1 && !playing ? `<p style="font-weight:700">おわり。${esc(story.summary || '')}</p>` : ''}
       </div>`);
       $('.backlink', box).addEventListener('click', endStory);
+      // この物語の背景（原因）と、その後（結果）
+      const sc = !story.generated && STORY_CAUSES[story.id];
+      if (sc && si === 0 && sc.causes && sc.causes.length) {
+        const w = el('<div><h3>なぜ起きた？（背景・原因）</h3></div>');
+        w.appendChild(whyList(sc.causes.map(t => ({ i: EVENT_IDX[t], kind: 'cause', why: '' })).filter(c => c.i != null), 'up'));
+        const b = el('<button type="button" class="btn chainbtn">▶ 背景からたどって見る</button>');
+        b.addEventListener('click', () => {
+          const pre = sc.causes.map(t => EVENT_IDX[t]).filter(i => i != null).sort((a, b) => EVENTS[a].year - EVENTS[b].year).map(i => eventStep(i, `背景 → 「${story.title}」`));
+          startStory(Object.assign({}, story, { id: story.id + ':bg', generated: true, title: story.title + '（背景から）', steps: pre.concat(story.steps) }), 0);
+        });
+        w.appendChild(b);
+        box.appendChild(w);
+      }
+      if (sc && si === story.steps.length - 1 && sc.results && sc.results.length) {
+        const w = el('<div><h3>その後（結果・影響）</h3></div>');
+        w.appendChild(whyList(sc.results.map(t => ({ i: EVENT_IDX[t], kind: 'result', why: '' })).filter(c => c.i != null), 'down'));
+        box.appendChild(w);
+      }
       const dots = $('.st-dots', box);
       story.steps.forEach((x, k) => {
         const d = el(`<button type="button" class="${k === si ? 'on' : k < si ? 'past' : ''}" title="${esc(x.title)}">${k + 1}</button>`);

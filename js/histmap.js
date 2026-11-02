@@ -17,6 +17,24 @@ function createHistMap(host, opts = {}) {
         <button type="button" data-z="in" aria-label="拡大">＋</button>
         <button type="button" data-z="out" aria-label="縮小">－</button>
         <button type="button" data-z="reset" aria-label="元の大きさ">⟲</button>
+        <button type="button" class="gear" aria-label="表示の設定" aria-expanded="false">⚙</button>
+      </div>
+      <div class="hm-set" hidden>
+        <div class="hm-set-h">表示の設定 <button type="button" class="x" aria-label="とじる">✕</button></div>
+        <div class="hm-set-g"><b>地図に出すもの</b>
+          <label><input type="checkbox" data-l="cap"> ■ 都</label>
+          <label><input type="checkbox" data-l="people"> ● 人物</label>
+          <label><input type="checkbox" data-l="events"> ◆ 出来事</label>
+          <label><input type="checkbox" data-l="sphere"> ▨ 勢力圏（斜線）</label>
+          <label><input type="checkbox" data-l="modern"> ┄ 現在の国境</label>
+        </div>
+        <div class="hm-set-g"><b>画面</b>
+          <label><input type="checkbox" data-u="views"> 地域のボタン</label>
+          ${opts.bar === false ? '' : '<label><input type="checkbox" data-u="eras"> 年のジャンプボタン</label>'}
+        </div>
+        ${opts.bar === false ? '' : `<div class="hm-set-g"><b>▶ 再生の速さ</b>
+          <div class="hm-speed"><button type="button" data-sp="1">×1</button><button type="button" data-sp="2">×2</button><button type="button" data-sp="4">×4</button><button type="button" data-sp="8">×8</button></div>
+        </div>`}
       </div>
       <div class="hm-views"></div>
       <div class="hm-tip" hidden></div>
@@ -30,15 +48,6 @@ function createHistMap(host, opts = {}) {
         <button type="button" class="yr" title="クリックで年を入力"></button>
       </div>
       <div class="hm-eras"></div>
-      <div class="hm-layers">
-        <span class="muted">表示：</span>
-        <button type="button" class="chip" data-l="cap">■ 都</button>
-        <button type="button" class="chip" data-l="people">● 人物</button>
-        <button type="button" class="chip" data-l="events">◆ 出来事</button>
-        <button type="button" class="chip" data-l="sphere">▨ 勢力圏</button>
-        <button type="button" class="chip" data-l="modern">┄ 現在の国境</button>
-        <button type="button" class="chip" data-speed>速さ ×1</button>
-      </div>
     </div>`}
   </div>`);
   host.appendChild(root);
@@ -89,7 +98,7 @@ function createHistMap(host, opts = {}) {
     placeOverlay();
   });
   svg.call(zoom).on('dblclick.zoom', null);
-  $$('.hm-tools button', root).forEach(b => b.addEventListener('click', () => {
+  $$('.hm-tools button[data-z]', root).forEach(b => b.addEventListener('click', () => {
     const z = b.dataset.z;
     if (z === 'reset') svg.transition().duration(350).call(zoom.transform, d3.zoomIdentity);
     else svg.transition().duration(250).call(zoom.scaleBy, z === 'in' ? 1.6 : 1 / 1.6);
@@ -440,7 +449,7 @@ function createHistMap(host, opts = {}) {
     tip.style.top = Math.max(4, y - tip.offsetHeight - 10) + 'px';
   }
   function hideTip() { tip.hidden = true; }
-  svg.on('click', () => { if (st.sel) select(null); });
+  svg.on('click', () => { const sb = $('.hm-set', root); if (sb && !sb.hidden) { sb.hidden = true; $('.gear', root).setAttribute('aria-expanded', 'false'); return; } if (st.sel) select(null); });
 
   // --- 物語：地点・進路・川などを描く（画面の座標で。拡大しても線の太さは同じ） ---
   function drawStory(boxes) {
@@ -571,17 +580,32 @@ function createHistMap(host, opts = {}) {
     // 再生
     const playBtn = $('.hm-play', root);
     playBtn.addEventListener('click', () => (st.playing ? stop() : play()));
-    $('[data-speed]', root).addEventListener('click', e => { st.speed = st.speed === 4 ? 1 : st.speed * 2; e.currentTarget.textContent = `速さ ×${st.speed}`; });
-    // 表示の切りかえ
-    $$('.hm-layers [data-l]', root).forEach(b => {
-      const k = b.dataset.l;
-      b.setAttribute('aria-pressed', String(!!st.layers[k]));
-      b.addEventListener('click', () => {
-        st.layers[k] = !st.layers[k]; b.setAttribute('aria-pressed', String(st.layers[k]));
-        store.set('layers', st.layers); draw();
-      });
-    });
   }
+  // --- 表示の設定（⚙） ---
+  const setBox = $('.hm-set', root), gear = $('.gear', root);
+  const ui = Object.assign({ views: true, eras: true }, store.get('mapUI', {}));
+  const applyUI = () => {
+    viewsBox.style.display = ui.views ? '' : 'none';
+    const er = $('.hm-eras', root); if (er) er.style.display = ui.eras ? '' : 'none';
+  };
+  applyUI();
+  gear.addEventListener('click', e => { e.stopPropagation(); setBox.hidden = !setBox.hidden; gear.setAttribute('aria-expanded', String(!setBox.hidden)); });
+  $('.x', setBox).addEventListener('click', () => { setBox.hidden = true; gear.setAttribute('aria-expanded', 'false'); });
+  setBox.addEventListener('click', e => e.stopPropagation());
+  setBox.addEventListener('pointerdown', e => e.stopPropagation());
+  $$('[data-l]', setBox).forEach(c => {
+    const k = c.dataset.l; c.checked = !!st.layers[k];
+    c.addEventListener('change', () => { st.layers[k] = c.checked; store.set('layers', st.layers); draw(); });
+  });
+  $$('[data-u]', setBox).forEach(c => {
+    const k = c.dataset.u; c.checked = !!ui[k];
+    c.addEventListener('change', () => { ui[k] = c.checked; store.set('mapUI', ui); applyUI(); });
+  });
+  st.speed = store.get('speed', 1);
+  const markSpeed = () => $$('[data-sp]', setBox).forEach(b => b.classList.toggle('on', +b.dataset.sp === st.speed));
+  $$('[data-sp]', setBox).forEach(b => b.addEventListener('click', () => { st.speed = +b.dataset.sp; store.set('speed', st.speed); markSpeed(); }));
+  markSpeed();
+
   function play() {
     if (st.year >= YEAR_MAX) setYear(YEAR_MIN);
     st.playing = setInterval(() => {
