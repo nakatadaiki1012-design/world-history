@@ -6,7 +6,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const root = path.join(__dirname, '..');
 const ctx = { console }; ctx.window = ctx; ctx.self = ctx; vm.createContext(ctx);
-for (const f of ['vendor/d3.min.js', 'vendor/topojson-client.min.js', 'vendor/world-110m.js']) {
+for (const f of ['vendor/d3.min.js', 'vendor/topojson-client.min.js', 'vendor/world-50m.js']) {
   vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8').replace(/^/, ''), ctx, { filename: f });
 }
 const [year, view = 'world', out = '/tmp/preview.png', ...files] = process.argv.slice(2);

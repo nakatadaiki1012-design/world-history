@@ -28,6 +28,15 @@ const PEOPLE = (window.PEOPLE || []).filter(p => p && p.id && p.name).sort((a, b
 const PERSON = Object.fromEntries(PEOPLE.map(p => [p.id, p]));
 const EVENTS = (window.EVENTS || []).filter(e => e && e.title).sort((a, b) => a.year - b.year);
 const LESSONS = (window.LESSONS || []).filter(l => l && l.id);
+const PORTRAITS = window.PORTRAITS || {};
+const SPHERE_KIND = { tribute: '朝貢・冊封の範囲', suzerain: '宗主権・保護国', influence: '勢力範囲', bloc: '陣営・同盟', claim: '名目上の支配' };
+// 人物の肖像（ないときは頭文字のメダル）
+function portraitImg(p, cls = 'pimg') {
+  const ph = PORTRAITS[p.id];
+  const c = (REGION[p.region] || {}).color || '#555';
+  if (ph) return `<img class="${cls}" src="${esc(ph.src)}" alt="${esc(p.name)}" loading="lazy" style="border-color:${c}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'${cls} ini',textContent:'${esc(p.name[0])}'}))">`;
+  return `<span class="${cls} ini" style="background:${c}">${esc(p.name[0])}</span>`;
+}
 
 const REGIONS = [
   { id: 'east', name: '東アジア', color: '#c0392b' },

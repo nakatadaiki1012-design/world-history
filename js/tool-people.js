@@ -42,7 +42,7 @@ registerTool('people', {
         const mid = Math.round((p.born + p.died) / 2);
         const pl = GEO.placeAt(p, mid) || (p.places || [])[0];
         const a = el(`<a class="pcard" style="--c:${c};text-decoration:none;color:inherit" href="${mapHash(fixYear(mid), REGION_VIEW[p.region] || 'world', 'p:' + p.id)}">
-          <b>${esc(p.name)}</b>
+          <span>${portraitImg(p)}<b>${esc(p.name)}</b></span>
           <span class="m">${esc(p.role || '')}・<span class="num">${esc(lifeSpan(p))}</span></span>
           <span class="t">${esc(p.text || '')}</span>
           <span class="m">📍 ${esc((p.places || []).map(x => x.name).filter((v, i, a) => a.indexOf(v) === i).slice(0, 4).join(' → '))}</span>

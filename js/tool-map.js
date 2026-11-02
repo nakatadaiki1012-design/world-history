@@ -59,7 +59,7 @@ registerTool('map', {
     }
     function personItem(p, pl) {
       const c = (REGION[p.region] || {}).color || '#555';
-      const b = el(`<li><button type="button"><span class="dot" style="background:${c}"></span><span><b>${esc(p.name)}</b> <span class="muted" style="font-size:12.5px">${esc(p.role || '')}${pl ? '・' + esc(pl.name) : ''}</span></span><span class="yrs">${esc(lifeSpan(p))}</span></button></li>`);
+      const b = el(`<li><button type="button">${PORTRAITS[p.id] ? portraitImg(p) : `<span class="dot" style="background:${c}"></span>`}<span><b>${esc(p.name)}</b> <span class="muted" style="font-size:12.5px">${esc(p.role || '')}${pl ? '・' + esc(pl.name) : ''}</span></span><span class="yrs">${esc(lifeSpan(p))}</span></button></li>`);
       b.firstChild.addEventListener('click', () => { map.select({ type: 'person', id: p.id }); });
       return b;
     }
@@ -123,6 +123,7 @@ registerTool('map', {
       body.appendChild(el(`<div>
         <h2>使い方</h2>
         <p><b>下のツマミ</b>を左右に動かすと年が変わり、地図の国・王朝、都（■）、人物（●）、出来事（◆）が変わります。</p>
+        <p><b>斜線（▨）</b>は、直接は支配していないが影響がおよんだ範囲（朝貢・冊封、宗主権、勢力範囲、陣営）です。「勢力圏」で表示を切りかえられます。</p>
         <p><b>▶</b> で自動で年が進みます。「速さ」で速さを変えられます。右はしの年をおすと、年を入力できます（例：<span class="num">前221</span>、<span class="num">1453</span>）。</p>
         <p>地図の<b>色のついた国・王朝</b>や<b>人物</b>をおすと、右に説明が出ます。人物をえらぶと、一生の<b>足あと</b>が点線で出ます。</p>
         <p>左下のボタンで<b>見る範囲</b>（東アジア・西アジア など）を切りかえ。指２本やマウスのホイールで拡大できます。</p>
@@ -158,6 +159,10 @@ registerTool('map', {
         [`⏮ はじまり（${esc(yearLabel(p.start))}）`, () => map.setYear(p.start)],
         [`⏭ おわり（${esc(yearLabel(Math.min(p.end, YEAR_MAX)))}）`, () => map.setYear(Math.min(p.end, YEAR_MAX))]
       ]));
+      if (p.spheres && p.spheres.length) {
+        body.appendChild(el('<h3>勢力圏（地図の斜線）</h3>'));
+        body.appendChild(jumpBtns(p.spheres.map(s => [`▨ ${esc(SPHERE_KIND[s.kind] || '勢力圏')}：${esc(s.name || '')}（${esc(yearLabel(s.from))}〜）`, () => map.setYear(s.from)])));
+      }
       if (p.shapes && p.shapes.length > 1) {
         body.appendChild(el('<h3>範囲のうつりかわり</h3>'));
         body.appendChild(jumpBtns(p.shapes.map(s => [`${esc(yearLabel(s.from))}〜`, () => map.setYear(s.from)])));
@@ -182,13 +187,16 @@ registerTool('map', {
       body.appendChild(back());
       const reg = REGION[p.region];
       const pol = p.polity && POLITY[p.polity];
+      const ph = PORTRAITS[p.id];
       body.appendChild(el(`<div>
+        ${portraitImg(p, 'bigimg')}
         <div class="muted" style="font-size:13px"><span class="dot" style="display:inline-block;background:${reg ? reg.color : '#555'}"></span> ${esc(reg ? reg.name : '')}・${esc(p.role || '')}</div>
         <h2>${esc(p.name)}</h2>
         <div class="muted" style="font-size:13px">${esc(p.kana || '')}</div>
         <div class="num" style="font-weight:700">${esc(lifeSpan(p))}</div>
         <p>${esc(p.text || '')}</p>
         ${p.keys && p.keys.length ? `<div class="keys">${p.keys.map(k => `<span>${esc(k)}</span>`).join('')}</div>` : ''}
+        ${ph ? `<div class="credit">肖像：${esc(ph.what || '')}${ph.artist ? '（' + esc(ph.artist) + '）' : ''}・${esc(ph.license || '')}・<a href="${esc(ph.page || '#')}" target="_blank" rel="noopener">ウィキメディア・コモンズ</a></div>` : ''}
       </div>`));
       const pairs = [[`⏮ 生まれた年`, () => map.setYear(p.born)], [`⏭ 亡くなった年`, () => map.setYear(p.died)]];
       pairs.push([`▶ 一生をたどる`, () => playLife(p)]);

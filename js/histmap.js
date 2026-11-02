@@ -5,7 +5,7 @@ function createHistMap(host, opts = {}) {
   const st = {
     year: fixYear(opts.year != null ? opts.year : 750),
     view: GEO.VIEWS[opts.view] ? opts.view : 'world',
-    layers: Object.assign({ cap: true, people: true, events: true, modern: false }, store.get('layers', {}), opts.layers || {}),
+    layers: Object.assign({ cap: true, people: true, events: true, modern: false, sphere: true }, store.get('layers', {}), opts.layers || {}),
     sel: null,          // { type: 'polity' | 'person' | 'event', id }
     playing: null, speed: 1, w: 0, h: 0, k: 1, t: d3.zoomIdentity
   };
@@ -35,6 +35,7 @@ function createHistMap(host, opts = {}) {
         <button type="button" class="chip" data-l="cap">■ 都</button>
         <button type="button" class="chip" data-l="people">● 人物</button>
         <button type="button" class="chip" data-l="events">◆ 出来事</button>
+        <button type="button" class="chip" data-l="sphere">▨ 勢力圏</button>
         <button type="button" class="chip" data-l="modern">┄ 現在の国境</button>
         <button type="button" class="chip" data-speed>速さ ×1</button>
       </div>
@@ -45,21 +46,37 @@ function createHistMap(host, opts = {}) {
   const svg = d3.select(svgEl);
   const gZoom = svg.append('g');
   const gBase = gZoom.append('g');
+  const gSph = gZoom.append('g');
   const gPol = gZoom.append('g');
   const gModern = gZoom.append('g');
   const gEdge = gZoom.append('g');
   const gOver = svg.append('g');   // 名前・点（拡大しても大きさが変わらない）
   const gTrail = gOver.append('g'), gLab = gOver.append('g'), gCap = gOver.append('g'), gEv = gOver.append('g'), gPeo = gOver.append('g');
   const uid = 'hm' + Math.random().toString(36).slice(2, 8);
+  svg.append('defs').append('clipPath').attr('id', uid + 'pc').append('circle').attr('r', 11);
   let pr, path, landPath;
 
-  // --- 見る範囲のボタン ---
+  // --- 見る範囲のボタン（大きな地域。えらぶと、その中のくわしい範囲も出る） ---
   const viewsBox = $('.hm-views', root);
-  Object.entries(GEO.VIEWS).forEach(([k, v]) => {
-    const b = el(`<button type="button" class="chip" data-v="${k}">${v.name}</button>`);
-    b.addEventListener('click', () => setView(k));
-    viewsBox.appendChild(b);
-  });
+  const topOf = v => (GEO.VIEWS[v] && GEO.VIEWS[v].parent) || v;
+  function renderViews() {
+    viewsBox.innerHTML = '';
+    const cur = topOf(st.view);
+    Object.entries(GEO.VIEWS).filter(([, v]) => !v.parent).forEach(([k, v]) => {
+      const b = el(`<button type="button" class="chip${k === cur ? ' on' : ''}">${v.name}</button>`);
+      b.addEventListener('click', () => setView(k));
+      viewsBox.appendChild(b);
+      if (k !== cur) return;
+      const subs = Object.entries(GEO.VIEWS).filter(([, x]) => x.parent === k);
+      subs.forEach(([sk, sv]) => {
+        const sb = el(`<button type="button" class="chip sub${sk === st.view ? ' on' : ''}">${sv.name}</button>`);
+        sb.addEventListener('click', () => setView(sk === st.view ? k : sk));
+        viewsBox.appendChild(sb);
+      });
+    });
+    const on = $('.chip.sub.on', viewsBox) || $('.chip.on', viewsBox);
+    if (on) requestAnimationFrame(() => { viewsBox.scrollLeft = Math.max(0, on.offsetLeft - 60); });
+  }
 
   // --- 拡大・移動 ---
   const zoom = d3.zoom().scaleExtent([1, 12]).on('zoom', ev => {
@@ -96,9 +113,10 @@ function createHistMap(host, opts = {}) {
     gBase.append('clipPath').attr('id', uid + 'land').append('path').attr('d', landPath);
     gBase.append('path').attr('class', 'hm-land').attr('d', landPath);
     gPol.attr('clip-path', `url(#${uid}land)`);
+    gSph.attr('clip-path', `url(#${uid}land)`);
     gModern.selectAll('*').remove();
     gModern.append('path').attr('class', 'hm-modern').attr('d', path(topojson.mesh(window.WORLD_TOPO, window.WORLD_TOPO.objects.countries, (a, b) => a !== b)));
-    $$('.hm-views .chip', root).forEach(b => b.classList.toggle('on', b.dataset.v === st.view));
+    renderViews();
   }
 
   // --- 名前の位置（いちばん大きい部分のまん中） ---
@@ -112,8 +130,10 @@ function createHistMap(host, opts = {}) {
     const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
     polys.forEach(c => { const g = { type: 'Polygon', coordinates: c }; const a = d3.geoArea(g); if (a > bestA) { bestA = a; best = g; } });
     // 陸地の部分を優先：輪全体の中心が海のときもあるので、陸地にかかるいちばん大きい国の中心も候補に
-    const pt = best ? path.centroid(best) : null;
-    const out = pt && isFinite(pt[0]) ? pt : null;
+    // 地図の端で切れた形でも位置がずれないように、球面上の中心を投影する
+    let pt = best ? pr(d3.geoCentroid(best)) : null;
+    if (pt && best && !d3.geoContains(best, d3.geoCentroid(best))) { const c = path.centroid(best); if (isFinite(c[0])) pt = c; }
+    const out = pt && isFinite(pt[0]) && isFinite(pt[1]) ? pt : null;
     labelCache.set(key, out);
     return out;
   }
@@ -123,6 +143,25 @@ function createHistMap(host, opts = {}) {
     if (!pr) return;
     const y = st.year;
     feats = GEO.politiesAt(y);
+    // 勢力圏（斜線）
+    const sph = st.layers.sphere && !opts.mini ? GEO.spheresAt(y) : [];
+    const defs = svg.select('defs').empty() ? svg.insert('defs', ':first-child') : svg.select('defs');
+    sph.forEach(f => {
+      const c = f.properties.p.color || '#888', id = uid + 'h' + c.replace(/[^0-9a-z]/gi, '');
+      if (defs.select('#' + id).empty()) {
+        const pt = defs.append('pattern').attr('id', id).attr('patternUnits', 'userSpaceOnUse').attr('width', 7).attr('height', 7).attr('patternTransform', 'rotate(45)');
+        pt.append('rect').attr('width', 7).attr('height', 7).attr('fill', c).attr('fill-opacity', 0.1);
+        pt.append('line').attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 7).attr('stroke', c).attr('stroke-width', 2.2).attr('stroke-opacity', 0.55);
+      }
+      f.pat = id;
+    });
+    const ss = gSph.selectAll('path').data(sph, f => f.id);
+    ss.exit().remove();
+    ss.enter().append('path').attr('class', 'hm-sph')
+      .on('click', (ev, f) => { ev.stopPropagation(); select({ type: 'polity', id: f.properties.p.id }); })
+      .on('mousemove', (ev, f) => showTip(ev, `<b>${esc(f.properties.p.name)}</b>の${esc(SPHERE_KIND[f.properties.s.kind] || '勢力圏')}<br><span style="font-size:12px">${esc(f.properties.s.name || '')}</span>`))
+      .on('mouseleave', hideTip)
+      .merge(ss).attr('d', path).attr('fill', f => `url(#${f.pat})`).attr('stroke', f => f.properties.p.color || '#888');
     if (opts.only) feats = feats.filter(f => opts.only.includes(f.properties.p.id));
     const sel = st.sel;
     const ps = gPol.selectAll('path.hm-pol').data(feats, f => f.properties.p.id + '|' + f.properties.s.from);
@@ -181,7 +220,7 @@ function createHistMap(host, opts = {}) {
       const q = pr([x.pl.lon, x.pl.lat]); if (!q) return null;
       const [sx, sy] = t.apply(q); return Object.assign({ sx, sy }, x);
     }).filter(x => x && inView(x.sx, x.sy));
-    ppl.forEach(x => boxes.push([x.sx - 6, x.sy - 6, x.sx + 6, x.sy + 6]));
+    ppl.forEach(x => { const r = PORTRAITS[x.p.id] ? 13 : 6; boxes.push([x.sx - r, x.sy - r, x.sx + r, x.sy + r]); });
 
     // 国・王朝の名前
     const labs = [];
@@ -252,8 +291,8 @@ function createHistMap(host, opts = {}) {
     // 人物の名前
     ppl.forEach(x => {
       const isSel = sel && sel.type === 'person' && sel.id === x.p.id;
-      const tw = x.p.name.length * 12.5;
-      const cand = [[9, 4, 'start'], [-9, 4, 'end'], [0, -10, 'middle'], [0, 18, 'middle']];
+      const tw = x.p.name.length * 12.5, r = PORTRAITS[x.p.id] ? 15 : 9;
+      const cand = [[r, 4, 'start'], [-r, 4, 'end'], [0, -r - 2, 'middle'], [0, r + 11, 'middle']];
       x.lab = null;
       for (const [dx, dy, a] of cand) {
         const x0 = a === 'start' ? x.sx + dx : a === 'end' ? x.sx + dx - tw : x.sx - tw / 2;
@@ -265,15 +304,20 @@ function createHistMap(host, opts = {}) {
     pp.exit().remove();
     const pe = pp.enter().append('g').attr('class', 'hm-person')
       .on('click', (ev, d) => { ev.stopPropagation(); select({ type: 'person', id: d.p.id }); })
-      .on('mousemove', (ev, d) => showTip(ev, `<b>${esc(d.p.name)}</b>（${esc(d.p.role || '')}）<br><span class="muted">${esc(d.pl.name)}${d.pl.note ? '：' + esc(d.pl.note) : ''}</span>`))
+      .on('mousemove', (ev, d) => showTip(ev, `${portraitImg(d.p, 'tipimg')}<b>${esc(d.p.name)}</b>（${esc(d.p.role || '')}）<br><span class="muted">${esc(d.pl.name)}${d.pl.note ? '：' + esc(d.pl.note) : ''}</span>`))
       .on('mouseleave', hideTip);
-    pe.append('circle').attr('r', 6);
+    pe.append('circle').attr('class', 'ring');
+    pe.each(function (d) {
+      const ph = PORTRAITS[d.p.id];
+      if (ph) d3.select(this).append('image').attr('href', ph.src).attr('x', -11).attr('y', -11).attr('width', 22).attr('height', 22)
+        .attr('preserveAspectRatio', 'xMidYMin slice').attr('clip-path', `url(#${uid}pc)`);
+    });
     pe.append('text');
     const pm = pe.merge(pp);
     pm.attr('transform', d => `translate(${d.sx},${d.sy})`)
       .classed('sel', d => sel && sel.type === 'person' && sel.id === d.p.id)
       .style('opacity', d => d.ghost ? 0.45 : 1);
-    pm.select('circle').attr('fill', d => (REGION[d.p.region] || {}).color || '#555');
+    pm.select('circle').attr('r', d => PORTRAITS[d.p.id] ? 12.5 : 6).attr('fill', d => (REGION[d.p.region] || {}).color || '#555');
     pm.select('text').each(function (d) {
       const s = d3.select(this);
       if (!d.lab) { s.text(''); return; }
