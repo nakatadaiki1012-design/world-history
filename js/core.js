@@ -23,6 +23,18 @@ function registerTool(id, def) { TOOLS[id] = Object.assign({ id }, def); }
 
 // --- データ（読みこめなかったファイルがあっても動くように） ---
 const POLITIES = (window.POLITIES || []).filter(p => p && p.id && p.name);
+// 同じ地域の国は同じ系統の色なので、となりどうしが見分けやすいように、国ごとに色合い・明るさを少しずらす（いつも同じずらし方）
+(function varyColors() {
+  const hash = str => { let h = 2166136261; for (const c of str) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
+  POLITIES.forEach(p => {
+    const c = d3.hsl(p.color || '#888'); if (!isFinite(c.h)) return;
+    const a = hash(p.id), b = hash(p.id + '*');
+    c.h = (c.h + (a - 0.5) * 56 + 360) % 360;
+    c.s = Math.min(0.85, Math.max(0.3, c.s + 0.12));
+    c.l = Math.min(0.62, Math.max(0.3, c.l + (b - 0.5) * 0.22));
+    p.color = c.formatHex();
+  });
+})();
 const POLITY = Object.fromEntries(POLITIES.map(p => [p.id, p]));
 const PEOPLE = (window.PEOPLE || []).filter(p => p && p.id && p.name).sort((a, b) => a.born - b.born);
 const PERSON = Object.fromEntries(PEOPLE.map(p => [p.id, p]));
