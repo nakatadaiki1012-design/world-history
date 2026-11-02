@@ -84,7 +84,7 @@ function createHistMap(host, opts = {}) {
     st.t = ev.transform; st.k = ev.transform.k;
     if (ev.sourceEvent) st.cam = null;   // 自分で動かしたら、物語のカメラの目標は忘れる
     // 都市の大きさまで拡大したら、国の色をうすくして地形の線を見やすく
-    gPol.style('opacity', st.k > 25 ? 0.45 : null);
+    gPol.style('opacity', st.k > 25 ? 0.22 : st.k > 12 ? 0.6 : null); gEdge.style('opacity', st.k > 25 ? 0.3 : null);
     gZoom.attr('transform', ev.transform);
     placeOverlay();
   });
@@ -271,6 +271,7 @@ function createHistMap(host, opts = {}) {
       const q = pr([c.lon, c.lat]); if (!q) return;
       const [x, y] = t.apply(q); if (!inView(x, y)) return;
       if (caps.some(o => Math.hypot(o.x - x, o.y - y) < 5)) return;
+      if (storyLabels.some(m => Math.hypot(m.x - x, m.y - y) < 14)) return;   // 物語の地点と同じ場所の都は出さない
       caps.push({ id: p.id + c.name, name: c.name, x, y, rank: p.rank || 2, lab: null });
       boxes.push([x - 4, y - 4, x + 4, y + 4]);
     });
@@ -452,7 +453,16 @@ function createHistMap(host, opts = {}) {
       gStory.append('path').attr('class', 'st-line').attr('d', line(pts));
     });
     (S.routes || []).forEach((r, i) => {
-      const pts = r.pts.map(P).filter(Boolean); if (pts.length < 2) return;
+      // 地図の端（日付変更線のあたり）をまたぐ線は、そこで切る
+      let pts = r.pts.map(P).filter(Boolean); if (pts.length < 2) return;
+      const segs = [[pts[0]]];
+      for (let k = 1; k < pts.length; k++) {
+        if (Math.abs(pts[k][0] - pts[k - 1][0]) > st.w * st.t.k * 0.5) segs.push([]);
+        segs[segs.length - 1].push(pts[k]);
+      }
+      segs.slice(0, -1).forEach(sg => { if (sg.length > 1) gStory.append('path').attr('class', 'st-route').attr('d', line(sg)).attr('stroke', r.color || '#8c2f39'); });
+      pts = segs[segs.length - 1];
+      if (pts.length < 2) return;
       const c = r.color || '#8c2f39';
       const mid = uid + 'ar' + i;
       gStory.append('marker').attr('id', mid).attr('viewBox', '0 0 10 10').attr('refX', 7).attr('refY', 5).attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto-start-reverse')
