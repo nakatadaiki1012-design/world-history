@@ -104,6 +104,7 @@ function createHistMap(host, opts = {}) {
 
   function buildBase() {
     pr = GEO.projection(st.view, st.w, st.h);
+    labelCache.clear();
     path = d3.geoPath(pr);
     const { land, countries } = GEO.world();
     landPath = path(land);
@@ -206,75 +207,142 @@ function createHistMap(host, opts = {}) {
     }
   }
 
-  // 重ならないように名前を置く（だいたいの四角で判定）
+  // --- 文字の幅をはかる（だいたいではなく、実際のフォントで） ---
+  const mctx = document.createElement('canvas').getContext('2d');
+  const mcache = new Map();
+  function textW(str, px, display) {
+    const key = str + '|' + px + '|' + (display ? 1 : 0);
+    if (!mcache.has(key)) {
+      const ff = getComputedStyle(document.documentElement).getPropertyValue(display ? '--font-display' : '--font-body');
+      mctx.font = `${display ? 800 : 700} ${px}px ${ff || 'sans-serif'}`;
+      mcache.set(key, mctx.measureText(str).width + (display ? str.length * px * 0.04 : 0));
+    }
+    return mcache.get(key);
+  }
+
+  // 重ならないように名前を置く。
+  // 1) 点（人物・都・出来事）を先に置き、同じ場所に集まった人物は輪のように広げる
+  // 2) 名前は大事なものから順に、候補の位置を試して、何とも重ならない所にだけ出す
   function placeOverlay() {
     if (!pr) return;
     if (opts.mini) { gLab.selectAll('*').remove(); gCap.selectAll('*').remove(); gEv.selectAll('*').remove(); gPeo.selectAll('*').remove(); gTrail.selectAll('*').remove(); return; }
     const t = st.t, W = st.w, H = st.h, sel = st.sel;
+    const PAD = 2;
     const boxes = [];
-    const hit = b => boxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
-    const inView = (x, y) => x > -40 && x < W + 40 && y > -20 && y < H + 20;
+    const hit = b => b[0] < 2 || b[2] > W - 2 || b[1] < 2 || b[3] > H - 2 || boxes.some(o => b[0] - PAD < o[2] && b[2] + PAD > o[0] && b[1] - PAD < o[3] && b[3] + PAD > o[1]);
+    const inView = (x, y) => x > -10 && x < W + 10 && y > -10 && y < H + 10;
+    const isSelP = id => sel && sel.type === 'person' && sel.id === id;
+    // 左上の大きな年と、右上のボタンの場所はあけておく
+    boxes.push([0, 0, 190, 70], [W - 52, 0, W, 150], [0, H - 40, W, H]);
 
-    // 人物の点を先に（名前の場所取りを優先）
+    // 人物の点（近すぎるものは輪のように広げる）
     const ppl = shownPeople.map(x => {
       const q = pr([x.pl.lon, x.pl.lat]); if (!q) return null;
-      const [sx, sy] = t.apply(q); return Object.assign({ sx, sy }, x);
+      const [sx, sy] = t.apply(q); return Object.assign({ sx, sy, ox: sx, oy: sy, r: PORTRAITS[x.p.id] ? 12.5 : 6 }, x);
     }).filter(x => x && inView(x.sx, x.sy));
-    ppl.forEach(x => { const r = PORTRAITS[x.p.id] ? 13 : 6; boxes.push([x.sx - r, x.sy - r, x.sx + r, x.sy + r]); });
-
-    // 国・王朝の名前
-    const labs = [];
-    const order = feats.slice().sort((a, b) => (a.properties.p.rank || 2) - (b.properties.p.rank || 2) || d3.geoArea(b) - d3.geoArea(a));
-    order.forEach(f => {
-      const p = f.properties.p, rank = p.rank || 2;
-      const c = labelPoint(f); if (!c) return;
-      const [x, y] = t.apply(c);
-      if (!inView(x, y)) return;
-      const bounds = path.bounds(f); const wpx = (bounds[1][0] - bounds[0][0]) * t.k;
-      const isSel = sel && sel.type === 'polity' && sel.id === p.id;
-      if (!isSel && wpx < 18) return;
-      let fs = rank === 1 ? 17 : rank === 2 ? 14 : 12;
-      if (wpx < 70) fs = Math.max(11, fs - 3);
-      if (st.view === 'world' && t.k < 1.6 && rank >= 3 && !isSel) return;
-      const tw = p.name.length * fs * 0.98, b = [x - tw / 2, y - fs * 0.6, x + tw / 2, y + fs * 0.6];
-      if (!isSel && hit(b)) return;
-      boxes.push(b); labs.push({ p, x, y, fs });
+    const used = new Set();
+    ppl.forEach((x, i) => {
+      if (used.has(i)) return;
+      const grp = [i];
+      ppl.forEach((y, j) => { if (j > i && !used.has(j) && Math.hypot(x.ox - y.ox, x.oy - y.oy) < 18) grp.push(j); });
+      if (grp.length < 2) return;
+      grp.forEach(j => used.add(j));
+      const n = grp.length, rr = Math.max(16, 14 / Math.sin(Math.PI / n));
+      const cx = d3.mean(grp, j => ppl[j].ox), cy = d3.mean(grp, j => ppl[j].oy);
+      grp.forEach((j, k) => { const a = -Math.PI / 2 + 2 * Math.PI * k / n; ppl[j].sx = cx + rr * Math.cos(a); ppl[j].sy = cy + rr * Math.sin(a); ppl[j].spread = true; });
     });
-    const ls = gLab.selectAll('text').data(labs, d => d.p.id);
-    ls.exit().remove();
-    ls.enter().append('text').attr('class', 'hm-lab').merge(ls)
-      .attr('x', d => d.x).attr('y', d => d.y).attr('font-size', d => d.fs).text(d => d.p.name);
+    ppl.forEach(x => boxes.push([x.sx - x.r, x.sy - x.r, x.sx + x.r, x.sy + x.r]));
 
-    // 都
+    // 都の点
     const caps = [];
     if (st.layers.cap) feats.forEach(f => {
       const p = f.properties.p, c = GEO.capitalAt(p, st.year); if (!c) return;
       if ((p.rank || 2) >= 3 && t.k < 2 && !(sel && sel.id === p.id)) return;
       const q = pr([c.lon, c.lat]); if (!q) return;
       const [x, y] = t.apply(q); if (!inView(x, y)) return;
-      const tw = c.name.length * 11 + 8, b = [x + 5, y - 13, x + 5 + tw, y];
-      const showName = !hit(b) && (t.k >= 1.4 || st.view !== 'world' || (p.rank || 2) === 1);
-      if (showName) boxes.push(b);
-      caps.push({ id: p.id + c.name, name: c.name, x, y, showName });
+      if (caps.some(o => Math.hypot(o.x - x, o.y - y) < 5)) return;
+      caps.push({ id: p.id + c.name, name: c.name, x, y, rank: p.rank || 2, lab: null });
+      boxes.push([x - 4, y - 4, x + 4, y + 4]);
     });
+    // 出来事の点
+    const evs = shownEvents.map(x => {
+      const q = pr([x.e.lon, x.e.lat]); if (!q) return null;
+      const [sx, sy] = t.apply(q); return Object.assign({ sx, sy, lab: null }, x);
+    }).filter(x => x && inView(x.sx, x.sy));
+    evs.forEach(x => boxes.push([x.sx - 7, x.sy - 7, x.sx + 7, x.sy + 7]));
+
+    // 名前の候補を試す
+    function tryPlace(cands) {
+      for (const c of cands) if (c.force || !hit(c.b)) { boxes.push(c.b); return c; }
+      return null;
+    }
+    const side = (x, y, r, w, h, force) => [
+      { b: [x + r, y - h / 2, x + r + w, y + h / 2], dx: r, dy: 0, a: 'start' },
+      { b: [x - r - w, y - h / 2, x - r, y + h / 2], dx: -r, dy: 0, a: 'end' },
+      { b: [x - w / 2, y - r - h, x + w / 2, y - r], dx: 0, dy: -r - h / 2, a: 'middle' },
+      { b: [x - w / 2, y + r, x + w / 2, y + r + h], dx: 0, dy: r + h / 2, a: 'middle' },
+      { b: [x + r * .7, y - r * .7 - h, x + r * .7 + w, y - r * .7], dx: r * .7, dy: -r * .7 - h / 2, a: 'start' },
+      { b: [x + r * .7, y + r * .7, x + r * .7 + w, y + r * .7 + h], dx: r * .7, dy: r * .7 + h / 2, a: 'start' }
+    ].map((c, i) => Object.assign(c, { force: force && i === 0 }));
+
+    // 国・王朝の名前の候補
+    const labs = [];
+    const polCands = feats.map(f => {
+      const p = f.properties.p, rank = p.rank || 2;
+      const c = labelPoint(f); if (!c) return null;
+      const [x, y] = t.apply(c);
+      if (!inView(x, y)) return null;
+      const bounds = path.bounds(f); const wpx = (bounds[1][0] - bounds[0][0]) * t.k, hpx = (bounds[1][1] - bounds[0][1]) * t.k;
+      const isSel = sel && sel.type === 'polity' && sel.id === p.id;
+      if (!isSel && wpx < 22) return null;
+      if (st.view === 'world' && t.k < 1.6 && rank >= 3 && !isSel) return null;
+      let fs = rank === 1 ? 17 : rank === 2 ? 14 : 12;
+      if (wpx < 80) fs = Math.max(11, fs - 3);
+      const w = textW(p.name, fs, true), h = fs * 1.15;
+      if (!isSel && w > wpx * 1.6 && rank > 1) return null;   // 小さな国に長い名前は出さない
+      const dy = Math.min(hpx / 3, fs * 1.3);
+      const cands = [0, -dy, dy, -2 * dy, 2 * dy].map((d, i) => ({ b: [x - w / 2, y + d - h / 2, x + w / 2, y + d + h / 2], x, y: y + d, force: isSel && i === 0 }));
+      return { p, fs, cands, pri: isSel ? 0 : rank === 1 ? 1 : rank === 2 ? 3 : 6, area: wpx * hpx };
+    }).filter(Boolean);
+
+    // 優先順位：えらんだもの → 大帝国 → 人物（肖像あり）→ ふつうの国 → 人物 → 都 → 小国 → 出来事
+    const jobs = [];
+    polCands.forEach(c => jobs.push({ pri: c.pri, sub: -c.area, run: () => { const r = tryPlace(c.cands); if (r) labs.push({ p: c.p, x: r.x, y: r.y, fs: c.fs }); } }));
+    ppl.forEach(x => {
+      const s = isSelP(x.p.id), w = textW(x.p.name, 12, false), h = 14;
+      jobs.push({ pri: s ? 0 : PORTRAITS[x.p.id] ? 2 : 4, sub: 0, run: () => { x.lab = tryPlace(side(x.sx, x.sy, x.r + 3, w, h, s)); } });
+    });
+    caps.forEach(c => {
+      const w = textW(c.name, 11, false), h = 13;
+      if (!(t.k >= 1.4 || st.view !== 'world' || c.rank === 1)) return;
+      jobs.push({ pri: 5, sub: c.rank, run: () => { c.lab = tryPlace(side(c.x, c.y, 6, w, h, false)); } });
+    });
+    evs.forEach(x => {
+      const s = sel && sel.type === 'event' && sel.id === x.i;
+      if (!s && x.age > x.win / 3) return;
+      const w = textW(x.e.title, 11, false), h = 13;
+      jobs.push({ pri: s ? 0 : 7, sub: x.age, run: () => { x.lab = tryPlace(side(x.sx, x.sy, 9, w, h, s)); } });
+    });
+    jobs.sort((a, b) => a.pri - b.pri || a.sub - b.sub).forEach(j => j.run());
+
+    // --- 描く ---
+    const ls = gLab.selectAll('text').data(labs, d => d.p.id);
+    ls.exit().remove();
+    ls.enter().append('text').attr('class', 'hm-lab').merge(ls)
+      .attr('x', d => d.x).attr('y', d => d.y).attr('font-size', d => d.fs).text(d => d.p.name);
+
     const cs = gCap.selectAll('g').data(caps, d => d.id);
     cs.exit().remove();
     const ce = cs.enter().append('g').attr('class', 'hm-cap');
     ce.append('rect').attr('x', -3.5).attr('y', -3.5).attr('width', 7).attr('height', 7);
-    ce.append('text').attr('x', 6).attr('y', -5);
-    ce.merge(cs).attr('transform', d => `translate(${d.x},${d.y})`).select('text').text(d => d.showName ? d.name : '');
-
-    // 出来事
-    const evs = shownEvents.map(x => {
-      const q = pr([x.e.lon, x.e.lat]); if (!q) return null;
-      const [sx, sy] = t.apply(q); return Object.assign({ sx, sy }, x);
-    }).filter(x => x && inView(x.sx, x.sy));
-    evs.forEach(x => {
-      const isSel = sel && sel.type === 'event' && sel.id === x.i;
-      const tw = x.e.title.length * 11, b = [x.sx + 8, x.sy - 7, x.sx + 8 + tw, x.sy + 7];
-      x.showName = isSel || (x.age <= x.win / 3 && !hit(b));
-      if (x.showName) boxes.push(b);
+    ce.append('text').attr('dominant-baseline', 'central');
+    const cm = ce.merge(cs).attr('transform', d => `translate(${d.x},${d.y})`);
+    cm.select('text').each(function (d) {
+      const s = d3.select(this);
+      if (!d.lab) { s.text(''); return; }
+      s.attr('x', d.lab.dx).attr('y', d.lab.dy).attr('text-anchor', d.lab.a).text(d.name);
     });
+
     const vs = gEv.selectAll('g').data(evs, d => d.i);
     vs.exit().remove();
     const ve = vs.enter().append('g').attr('class', 'hm-ev')
@@ -282,48 +350,44 @@ function createHistMap(host, opts = {}) {
       .on('mousemove', (ev, d) => showTip(ev, `<b>${esc(d.e.title)}</b> <span class="muted num">${esc(yearLabel(d.e.year))}</span><br><span style="font-size:12px">${esc(d.e.text || '')}</span>`))
       .on('mouseleave', hideTip);
     ve.append('path').attr('d', 'M0,-7L7,0L0,7L-7,0Z');
-    ve.append('text').attr('x', 9).attr('y', 4);
-    ve.merge(vs).attr('transform', d => `translate(${d.sx},${d.sy})`)
+    ve.append('text').attr('dominant-baseline', 'central');
+    const vm = ve.merge(vs);
+    vm.attr('transform', d => `translate(${d.sx},${d.sy})`)
       .style('opacity', d => d.age === 0 ? 1 : Math.max(0.35, 1 - d.age / (d.win + 1)))
       .select('path').attr('fill', d => KIND_COLOR[d.e.kind] || '#555');
-    gEv.selectAll('g').select('text').text(d => d.showName ? d.e.title : '');
-
-    // 人物の名前
-    ppl.forEach(x => {
-      const isSel = sel && sel.type === 'person' && sel.id === x.p.id;
-      const tw = x.p.name.length * 12.5, r = PORTRAITS[x.p.id] ? 15 : 9;
-      const cand = [[r, 4, 'start'], [-r, 4, 'end'], [0, -r - 2, 'middle'], [0, r + 11, 'middle']];
-      x.lab = null;
-      for (const [dx, dy, a] of cand) {
-        const x0 = a === 'start' ? x.sx + dx : a === 'end' ? x.sx + dx - tw : x.sx - tw / 2;
-        const b = [x0, x.sy + dy - 11, x0 + tw, x.sy + dy + 2];
-        if (isSel || !hit(b)) { boxes.push(b); x.lab = { dx, dy, a }; break; }
-      }
+    vm.select('text').each(function (d) {
+      const s = d3.select(this);
+      if (!d.lab) { s.text(''); return; }
+      s.attr('x', d.lab.dx).attr('y', d.lab.dy).attr('text-anchor', d.lab.a).text(d.e.title);
     });
+
     const pp = gPeo.selectAll('g').data(ppl, d => d.p.id);
     pp.exit().remove();
     const pe = pp.enter().append('g').attr('class', 'hm-person')
       .on('click', (ev, d) => { ev.stopPropagation(); select({ type: 'person', id: d.p.id }); })
       .on('mousemove', (ev, d) => showTip(ev, `${portraitImg(d.p, 'tipimg')}<b>${esc(d.p.name)}</b>（${esc(d.p.role || '')}）<br><span class="muted">${esc(d.pl.name)}${d.pl.note ? '：' + esc(d.pl.note) : ''}</span>`))
       .on('mouseleave', hideTip);
+    pe.append('line').attr('class', 'leg');
     pe.append('circle').attr('class', 'ring');
     pe.each(function (d) {
       const ph = PORTRAITS[d.p.id];
       if (ph) d3.select(this).append('image').attr('href', ph.src).attr('x', -11).attr('y', -11).attr('width', 22).attr('height', 22)
         .attr('preserveAspectRatio', 'xMidYMin slice').attr('clip-path', `url(#${uid}pc)`);
     });
-    pe.append('text');
+    pe.append('text').attr('dominant-baseline', 'central');
     const pm = pe.merge(pp);
     pm.attr('transform', d => `translate(${d.sx},${d.sy})`)
-      .classed('sel', d => sel && sel.type === 'person' && sel.id === d.p.id)
+      .classed('sel', d => isSelP(d.p.id))
       .style('opacity', d => d.ghost ? 0.45 : 1);
-    pm.select('circle').attr('r', d => PORTRAITS[d.p.id] ? 12.5 : 6).attr('fill', d => (REGION[d.p.region] || {}).color || '#555');
+    // 広げた点は、もとの場所へ細い線
+    pm.select('line').attr('x1', 0).attr('y1', 0).attr('x2', d => d.spread ? d.ox - d.sx : 0).attr('y2', d => d.spread ? d.oy - d.sy : 0);
+    pm.select('circle').attr('r', d => d.r).attr('fill', d => (REGION[d.p.region] || {}).color || '#555');
     pm.select('text').each(function (d) {
       const s = d3.select(this);
       if (!d.lab) { s.text(''); return; }
       s.attr('x', d.lab.dx).attr('y', d.lab.dy).attr('text-anchor', d.lab.a).text(d.p.name);
     });
-    pm.filter(d => sel && sel.type === 'person' && sel.id === d.p.id).raise();
+    pm.filter(d => isSelP(d.p.id)).raise();
 
     drawTrail();
   }

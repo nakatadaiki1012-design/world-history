@@ -133,10 +133,11 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .credit { font-size: 11px; color: var(--muted); clear: both; }
 .credit a { color: inherit; }
 .hm-edge { fill: none; stroke-width: .9; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; pointer-events: none; opacity: .55; }
-.hm-lab { font-family: var(--font-display); font-weight: 800; fill: var(--label); stroke: var(--halo); stroke-width: 3.5px; paint-order: stroke; text-anchor: middle; dominant-baseline: middle; pointer-events: none; letter-spacing: .04em; }
+.hm-lab { font-family: var(--font-display); font-weight: 800; fill: var(--label); stroke: var(--halo); stroke-width: 3.5px; paint-order: stroke; text-anchor: middle; dominant-baseline: central; pointer-events: none; letter-spacing: .04em; }
 .hm-cap rect { fill: var(--panel); stroke: var(--ink); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
-.hm-cap text { font-size: 11px; fill: var(--ink); stroke: var(--halo); stroke-width: 3px; paint-order: stroke; pointer-events: none; }
+.hm-cap text { font-size: 11px; font-weight: 700; fill: var(--ink); stroke: var(--halo); stroke-width: 3px; paint-order: stroke; pointer-events: none; }
 .hm-person { cursor: pointer; }
+.hm-person .leg { stroke: var(--ink); stroke-width: 1; opacity: .5; }
 .hm-person circle { stroke: #fff; fill-opacity: 1; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
 .hm-person text { font-size: 12px; font-weight: 700; fill: var(--ink); stroke: var(--halo); stroke-width: 3.5px; paint-order: stroke; }
 .hm-person.sel circle { stroke: var(--ink); stroke-width: 2.5; }
@@ -146,7 +147,7 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .hm-stop.now circle { fill: var(--accent); }
 .hm-ev { cursor: pointer; }
 .hm-ev path { stroke: #fff; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
-.hm-ev text { font-size: 11px; fill: var(--ink); stroke: var(--halo); stroke-width: 3px; paint-order: stroke; }
+.hm-ev text { font-size: 11px; font-weight: 700; fill: var(--ink); stroke: var(--halo); stroke-width: 3px; paint-order: stroke; }
 .hm-yearbig { position: absolute; left: 12px; top: 8px; pointer-events: none; font-family: var(--font-display); font-weight: 800; font-size: 34px; line-height: 1; color: var(--ink); text-shadow: 0 0 6px var(--halo), 0 0 2px var(--halo); }
 .hm-yearbig small { display: block; font-family: var(--font-body); font-size: 13px; font-weight: 700; color: var(--muted); margin-top: 4px; }
 .hm-tools { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 4px; }
