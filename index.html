@@ -268,6 +268,10 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .c-reg { font-family: var(--font-display); font-weight: 800; font-size: 13px; fill: var(--muted); }
 .c-axis text { font-size: 10.5px; fill: var(--muted); font-family: var(--font-data); }
 .c-axis line { stroke: var(--line); }
+.ptl-name { font-size: 12.5px; font-weight: 700; fill: var(--ink); pointer-events: none; }
+.ptl-pol text { font-size: 10.5px; font-weight: 700; pointer-events: none; }
+.ptl-p:hover rect { fill-opacity: .38; }
+.ptl-roles { padding-top: 0; border-bottom: 1px solid var(--line); }
 .c-cursor { stroke: var(--accent); stroke-width: 2; }
 @media (max-width: 900px) { .chrono { grid-template-columns: 1fr; height: auto; } .chrono-main { height: 70vh; } }
 
@@ -435,6 +439,7 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 <script src="js/histmap.js"></script>
 <script src="js/tool-map.js"></script>
 <script src="js/tool-chrono.js"></script>
+<script src="js/tool-ptl.js"></script>
 <script src="js/tool-people.js"></script>
 <script src="js/tool-quiz.js"></script>
 <script src="js/tool-lessons.js"></script>
