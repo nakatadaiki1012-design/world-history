@@ -39,6 +39,13 @@ function createHistMap(host, opts = {}) {
           <label style="display:grid;gap:2px">声<select class="tts-voice"></select></label>
           <label style="display:grid;gap:2px">速さ <span class="tts-rv num"></span><input type="range" class="tts-rate" min="0.7" max="1.5" step="0.05"></label>
           <button type="button" class="chip tts-test">▶ ためしに聞く</button>
+          <label><input type="checkbox" class="furi-ck"> ふりがなを表示（むずかしい語）</label>
+          <details class="myyomi"><summary>読みまちがいを直す</summary>
+            <div class="muted" style="font-size:11.5px">まちがえた語と、正しい読み（ひらがな）を登録すると、次から正しく読みます（このブラウザに保存）。</div>
+            <div class="my-add"><input class="my-w" placeholder="語（例：関中）"><input class="my-r" placeholder="よみ（かんちゅう）"><button type="button" class="chip my-ok">登録</button></div>
+            <div><button type="button" class="chip my-play">▶ 聞いてみる</button></div>
+            <ul class="my-list"></ul>
+          </details>
         </div>
         ${opts.bar === false ? '' : `<div class="hm-set-g"><b>▶ 再生の速さ</b>
           <div class="hm-speed"><button type="button" data-sp="1">×1</button><button type="button" data-sp="2">×2</button><button type="button" data-sp="4">×4</button><button type="button" data-sp="8">×8</button></div>
@@ -884,6 +891,23 @@ function createHistMap(host, opts = {}) {
   rIn.addEventListener('input', () => { SPEECH.setRate(+rIn.value); rV.textContent = '×' + (+rIn.value).toFixed(2); });
   $('.tts-test', setBox).addEventListener('click', () => SPEECH.speak(`${yearLabel(st.year)}。${eraName(st.year)}です。この地図では、年のツマミを動かすと、国や王朝のようすが変わります。`));
   if (!SPEECH.ok) $$('.tts-test, .tts-rate', setBox).forEach(x => { x.disabled = true; });
+  // ふりがな
+  const fck = $('.furi-ck', setBox); fck.checked = store.get('furigana', false);
+  fck.addEventListener('change', () => { store.set('furigana', fck.checked); root.dispatchEvent(new CustomEvent('furigana')); });
+  // 自分で登録する読み
+  const myList = $('.my-list', setBox), mw = $('.my-w', setBox), mr = $('.my-r', setBox);
+  const renderMy = () => {
+    const m = store.get('myYomi', {});
+    myList.innerHTML = Object.entries(m).map(([w, r]) => `<li><b>${esc(w)}</b> → ${esc(r)} <button type="button" data-w="${esc(w)}" aria-label="けす">✕</button></li>`).join('') || '<li class="muted">まだありません</li>';
+    $$('button', myList).forEach(b => b.addEventListener('click', () => { const m2 = store.get('myYomi', {}); delete m2[b.dataset.w]; store.set('myYomi', m2); SPEECH.resetDict(); renderMy(); }));
+  };
+  $('.my-ok', setBox).addEventListener('click', () => {
+    const w = mw.value.trim(), r = mr.value.trim().replace(/[ァ-ン]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+    if (!w || !/^[ぁ-んー]+$/.test(r)) { mr.focus(); return; }
+    const m = store.get('myYomi', {}); m[w] = r; store.set('myYomi', m); SPEECH.resetDict(); mw.value = ''; mr.value = ''; renderMy();
+  });
+  $('.my-play', setBox).addEventListener('click', () => SPEECH.speak(mw.value.trim() || Object.keys(store.get('myYomi', {})).slice(-1)[0] || '関中'));
+  renderMy();
 
   st.speed = store.get('speed', 1);
   const markSpeed = () => $$('[data-sp]', setBox).forEach(b => b.classList.toggle('on', +b.dataset.sp === st.speed));

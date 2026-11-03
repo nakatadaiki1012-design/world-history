@@ -231,7 +231,8 @@ const SPEECH = {
   _dict: null,
   dict() {
     if (this._dict) return this._dict;
-    const map = Object.assign({}, SPEECH_BASE, window.YOMI || {});
+    // ふつうの語（自動）→ 歴史の語（手で確かめたもの）→ 自分で登録した読み、の順に上書き
+    const map = Object.assign({}, window.YOMI_AUTO || {}, SPEECH_BASE, window.YOMI || {}, store.get('myYomi', {}));
     // 人名：漢字だけの名前（例：李白）に読み（りはく）があれば使う。「劉邦（高祖）」のようなものは、かっこの前だけ
     (window.PEOPLE || []).forEach(p => {
       if (!p.kana) return;
@@ -243,6 +244,18 @@ const SPEECH = {
     this._dict = { map, re: keys.length ? new RegExp(keys.map(esc2).join('|'), 'g') : null };
     return this._dict;
   },
+  // ふりがな用：むずかしい語（手で確かめた辞書と人名だけ。ふつうの語は出さない）
+  _hard: null,
+  hard() {
+    if (this._hard) return this._hard;
+    const m = Object.assign({}, SPEECH_BASE, window.YOMI || {}, store.get('myYomi', {}));
+    (window.PEOPLE || []).forEach(p => { const nm = String(p.name).replace(/（.*?）/g, ''), kn = String(p.kana || '').replace(/（.*?）/g, ''); if (/^[一-龥々]{2,}$/.test(nm) && /^[ぁ-んー]+$/.test(kn) && !m[nm]) m[nm] = kn; });
+    const keys = Object.keys(m).filter(k => /[一-龥々]/.test(k) && k.length >= 2).sort((a, b) => b.length - a.length);
+    const escR = k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    this._hard = { map: m, re: keys.length ? new RegExp(keys.map(escR).join('|'), 'g') : null };
+    return this._hard;
+  },
+  resetDict() { this._dict = null; this._hard = null; },
   // 歴史の文を、読みまちがえにくい形に
   clean(t) {
     let s = String(t || '');
@@ -255,8 +268,21 @@ const SPEECH = {
       .replace(/[（(]/g, '、').replace(/[）)]/g, '、')
       .replace(/、\s*、/g, '、').replace(/、。/g, '。');
     // 読み仮名の辞書（長い語から先に置きかえる）
-    const D = SPEECH.dict();
-    if (D.re) s = s.replace(D.re, w => D.map[w]);
+    // 漢字のまとまりごとに、辞書の語で左から区切って読みにする。
+    // 手で確かめた語（歴史の語・人名）はいつも使う。自動の語（ふつうの語）は、まとまり全体を辞書の語だけで区切れたときだけ使う
+    // （「大西洋」を「大」＋「西洋」のように、まちがった区切り方で読まないように）
+    const D = SPEECH.dict(), H = SPEECH.hard().map, A = window.YOMI_AUTO || {};
+    s = s.replace(/[一-龥々]+/g, run => {
+      if (D.map[run]) return D.map[run];
+      const parts = []; let i = 0, ok = true;
+      while (i < run.length) {
+        let hit = null;
+        for (let L = Math.min(12, run.length - i); L >= 2; L--) { const w = run.substr(i, L); if (D.map[w]) { hit = w; break; } }
+        if (hit) { parts.push([hit, H[hit] || store.get('myYomi', {})[hit] ? 'hard' : 'auto']); i += hit.length; }
+        else { parts.push([run[i], 'none']); ok = false; i++; }
+      }
+      return parts.map(([w, k]) => (k === 'hard' || (k === 'auto' && ok)) ? D.map[w] : w).join('');
+    });
     // 王朝の名前（1文字）：あとに「の・は・が・朝・代…」が続くときだけ、読みをひらがなに
     const DYN = { 殷: 'いん', 周: 'しゅう', 秦: 'しん', 漢: 'かん', 魏: 'ぎ', 呉: 'ご', 蜀: 'しょく', 晋: 'しん', 隋: 'ずい', 唐: 'とう', 宋: 'そう', 遼: 'りょう', 元: 'げん', 明: 'みん', 清: 'しん', 金: 'きん' };
     s = s.replace(/(^|[^一-龥々])([殷周秦漢魏呉蜀晋隋唐宋遼元明清])(?=(の|は|が|を|に|と|で|も|へ|や|朝|代|軍|帝|王|、|。|$))/g, (m, pre, c) => pre + DYN[c]);
@@ -308,4 +334,12 @@ function speakBtn(getText, label = '🔊 読み上げ') {
     SPEECH.speak(getText(), () => b.classList.remove('on'));
   });
   return b;
+}
+
+// ふりがな：むずかしい語に、読みを小さく上につける（設定でオン・オフ）
+function furi(text) {
+  const t = esc(text);
+  if (!store.get('furigana', false)) return t;
+  const H = SPEECH.hard(); if (!H.re) return t;
+  return t.replace(H.re, w => `<ruby>${w}<rt>${H.map[w]}</rt></ruby>`);
 }

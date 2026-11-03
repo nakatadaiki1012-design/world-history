@@ -386,8 +386,8 @@ registerTool('map', {
       cap.innerHTML = `${capFig}
         <div class="cap-top"><span class="cap-story">${esc(story.title)}</span><span class="cap-n num">${si + 1} / ${n}</span></div>
         <div class="cap-when"><span class="num">${esc(yearLabel(s.year))}</span>${s.date ? ' ' + esc(s.date) : ''}<span>📍 ${esc(s.place || '')}</span></div>
-        <div class="cap-title">${esc(s.title)}</div>
-        <div class="cap-text${talkMode && s.talk ? ' talk' : ''}">${SPEECH.sentences(stepBody(s)).map((x, i) => `<span class="cap-s" data-i="${i}">${esc(x)}</span>`).join('')}${s.why ? `<div class="cap-why">🔗 ${esc(s.why)}</div>` : ''}</div>
+        <div class="cap-title">${furi(s.title)}</div>
+        <div class="cap-text${talkMode && s.talk ? ' talk' : ''}">${SPEECH.sentences(stepBody(s)).map((x, i) => `<span class="cap-s" data-i="${i}">${furi(x)}</span>`).join('')}${s.why ? `<div class="cap-why">🔗 ${esc(s.why)}</div>` : ''}</div>
         <div class="cap-ctl">
           <button type="button" data-a="prev" ${si === 0 ? 'disabled' : ''} aria-label="前の場面">◀</button>
           <button type="button" data-a="play" class="pl" aria-label="${playing ? '止める' : '自動で進む'}">${playing ? '❚❚' : '▶'}</button>
@@ -470,8 +470,8 @@ registerTool('map', {
           <div class="st-when"><span class="num">${esc(yearLabel(s.year))}</span>${s.date ? ' ' + esc(s.date) : ''}<span class="st-place">📍 ${esc(s.place || '')}</span></div>
           <h3 class="st-title">${si + 1}．${esc(s.title)}</h3>
           ${figureHtml(s.imageKey || `story:${story.id}:${si + 1}`)}
-          <p>${esc(s.text || '')}</p>
-          ${s.talk ? `<div class="st-talk"><b>🎙 語り</b>${esc(s.talk)}</div>` : ''}
+          <p>${furi(s.text || '')}</p>
+          ${s.talk ? `<div class="st-talk"><b>🎙 語り</b>${furi(s.talk)}</div>` : ''}
           ${s.why ? `<div class="st-why">🔗 ${esc(s.why)}</div>` : ''}
           <div class="st-people"></div>
         </div>
@@ -523,6 +523,7 @@ registerTool('map', {
       if (playing && !SPEECH.on) { const bar = $('.st-bar i', box); const ms = 5200 + (s.text || '').length * 45; bar.style.transition = `width ${ms}ms linear`; requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = '100%'; })); }
       renderCaption();
     }
+    map.root.addEventListener('furigana', () => { if (story) renderSideNow(); });
     const onKey = e => {
       if (!story || /input|textarea|select/i.test(document.activeElement.tagName)) return;
       if (e.key === 'ArrowRight') goStep(si + 1); else if (e.key === 'ArrowLeft') goStep(si - 1);
