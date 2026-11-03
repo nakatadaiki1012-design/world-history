@@ -110,7 +110,8 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 
 /* --- 歴史地図 --- */
 .hm { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
-.hm-stage { position: relative; flex: 1; min-height: 0; background: var(--sea); }
+.hm-stage { position: relative; flex: 1; min-height: 0; background: var(--sea); overflow: hidden; touch-action: none; }
+.hm-stage > svg { overflow: visible; transform-origin: 0 0; }
 .hm-stage svg { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
 .hm-sea { fill: var(--sea); }
 .hm-grat { fill: none; stroke: var(--grat); stroke-width: 1; vector-effect: non-scaling-stroke; }

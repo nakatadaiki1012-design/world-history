@@ -112,22 +112,50 @@ function createHistMap(host, opts = {}) {
   }
 
   // --- 拡大・移動 ---
-  const zoom = d3.zoom().scaleExtent([1, 400]).on('zoom', ev => {
+  // 指やマウスで動かしているあいだは、地図を「1枚の絵」としてずらす・拡大するだけにする（とても軽い）。
+  // はなしたら、その位置でくっきり描きなおす。物語のカメラなど、自動の動きはこれまでどおり
+  let gest = null;
+  const zsel = d3.select(stage);
+  const zoom = d3.zoom().scaleExtent([1, 400])
+    .filter(ev => (!ev.ctrlKey || ev.type === 'wheel') && !ev.button && svgEl.contains(ev.target))
+    .on('start.fast', ev => {
+      if (!ev.sourceEvent || opts.mini || gest) return;
+      gest = { t0: st.t };
+      svgEl.style.willChange = 'transform'; hideTip();
+    })
+    .on('zoom', ev => {
     st.t = ev.transform; st.k = ev.transform.k;
     if (ev.sourceEvent) st.cam = null;   // 自分で動かしたら、物語のカメラの目標は忘れる
+    if (gest) {
+      if (ev.sourceEvent) {
+        const t0 = gest.t0, t1 = ev.transform, r = t1.k / t0.k;
+        svgEl.style.transform = `translate(${t1.x - t0.x * r}px, ${t1.y - t0.y * r}px) scale(${r})`;
+        if (!zoomRaf) zoomRaf = requestAnimationFrame(() => { zoomRaf = 0; drawInset(true); });
+        return;
+      }
+      endGest();   // 動かしているとちゅうで自動の動きが始まったら、ふつうの描き方にもどす
+    }
     // 都市の大きさまで拡大したら、国の色をうすくして地形の線を見やすく
     gPol.style('opacity', st.k > 25 ? 0.22 : st.k > 12 ? 0.6 : null); gEdge.style('opacity', st.k > 25 ? 0.3 : null);
     gZoom.attr('transform', ev.transform);
     // 名前や点の置きなおしは、1コマに1回だけ（ホイールやピンチで何回よばれても）
-    if (!zoomRaf) zoomRaf = requestAnimationFrame(() => { zoomRaf = 0; updateTerrain(); placeOverlay(); drawInset(); });
+    if (!zoomRaf) zoomRaf = requestAnimationFrame(() => { zoomRaf = 0; updateTerrain(); placeOverlay(); drawInset(true); });
   });
   let zoomRaf = 0;
-  zoom.on('end.relief', () => { updateDetail(); scheduleRelief(); });
-  svg.call(zoom).on('dblclick.zoom', null);
+  function endGest() {
+    if (!gest) return;
+    gest = null;
+    svgEl.style.transform = ''; svgEl.style.willChange = '';
+    gPol.style('opacity', st.k > 25 ? 0.22 : st.k > 12 ? 0.6 : null); gEdge.style('opacity', st.k > 25 ? 0.3 : null);
+    gZoom.attr('transform', st.t);
+    updateTerrain(); placeOverlay();
+  }
+  zoom.on('end.relief', () => { endGest(); updateDetail(); drawInset(); scheduleRelief(); });
+  zsel.call(zoom).on('dblclick.zoom', null);
   $$('.hm-tools button[data-z]', root).forEach(b => b.addEventListener('click', () => {
     const z = b.dataset.z;
-    if (z === 'reset') svg.transition().duration(350).call(zoom.transform, d3.zoomIdentity);
-    else svg.transition().duration(250).call(zoom.scaleBy, z === 'in' ? 1.6 : 1 / 1.6);
+    if (z === 'reset') zsel.transition().duration(350).call(zoom.transform, d3.zoomIdentity);
+    else zsel.transition().duration(250).call(zoom.scaleBy, z === 'in' ? 1.6 : 1 / 1.6);
   }));
 
   function resize() {
@@ -142,7 +170,7 @@ function createHistMap(host, opts = {}) {
     svg.attr('viewBox', `0 0 ${w} ${h}`);
     zoom.extent([[0, 0], [w, h]]).translateExtent([[-w * 0.6, -h * 0.6], [w * 1.6, h * 1.6]]);
     buildBase();
-    if (st.cam) { svg.interrupt(); flyTo(st.cam.lon, st.cam.lat, st.cam.span, null, 0); }
+    if (st.cam) { zsel.interrupt(); flyTo(st.cam.lon, st.cam.lat, st.cam.span, null, 0); }
     draw();
   }
 
@@ -162,16 +190,44 @@ function createHistMap(host, opts = {}) {
     }) });
   }
   // 拡大のしかたが大きく変わったら、形を細かさに合わせて作りなおす
+  // 一度計算した細かさの形はとっておく（拡大・縮小を行ったり来たりしても、すぐ出る）
+  let pathCaches = new Map(), detailJob = 0;
   function updateDetail() {
     const k = Math.pow(2, Math.max(0, Math.floor(Math.log2(st.k || 1))));
     if (k === detailK) return;
     detailK = k;
     path = makePath(detailK);
-    pathCache = new WeakMap(); boundsCache = new WeakMap();
-    drawStatic();
-    gPol.selectAll('path.hm-pol').attr('d', pathOf);
-    gEdge.selectAll('path').attr('d', pathOf);
-    gSph.selectAll('path').attr('d', pathOf);
+    if (!pathCaches.has(k)) { if (pathCaches.size > 5) pathCaches.delete(pathCaches.keys().next().value); pathCaches.set(k, [new WeakMap(), new WeakMap()]); }
+    [pathCache, boundsCache] = pathCaches.get(k);
+    // 形の作りなおしは、1コマに 8 ミリ秒ずつ。指で動かすのをじゃましない
+    const job = ++detailJob, P = path, tasks = [];
+    // 計算は少しずつ、書きかえは最後に1回で（書きかえのたびに地図全体を描きなおさないように）
+    const out = [];
+    const each = (sel, fn) => sel.each(function (d) { const n = this; tasks.push(() => out.push([n, fn(d) || ''])); });
+    each(gPol.selectAll('path.hm-pol'), pathOf);
+    each(gEdge.selectAll('path'), pathOf);
+    each(gSph.selectAll('path'), pathOf);
+    let newLand = null, newGrat = null, newMesh = null;
+    tasks.push(() => { newLand = P(GEO.world().land); });
+    tasks.push(() => { newGrat = P(d3.geoGraticule10()); });
+    tasks.push(() => { if (drawStatic.mesh) newMesh = P(drawStatic.mesh); });
+    each(gTerr.selectAll('path'), d => P(d));
+    each(gWater.selectAll('path'), d => P(d));
+    let i = 0;
+    (function run() {
+      if (job !== detailJob) return;
+      const t0 = performance.now();
+      while (i < tasks.length && performance.now() - t0 < 8) tasks[i++]();
+      if (i < tasks.length) { requestAnimationFrame(run); return; }
+      if (gest) { requestAnimationFrame(run); return; }   // 動かしているあいだは待つ
+      out.forEach(([n, d]) => n.setAttribute('d', d));
+      landPath = newLand;
+      gBase.select('.hm-land').attr('d', landPath);
+      gBase.select('.hm-grat').attr('d', newGrat);
+      const W3 = st.w * 4, H3 = st.h * 4;
+      gMask.select('.hm-seamask').attr('d', `M${-W3},${-H3}H${W3 + st.w}V${H3 + st.h}H${-W3}Z` + landPath);
+      if (newMesh) gModern.select('path').attr('d', newMesh);
+    })();
   }
   // 地形などのデータがあとから届いたら、かき直す
   function onLate() { if (pr) { drawStatic(); draw(); } }
@@ -181,7 +237,8 @@ function createHistMap(host, opts = {}) {
     labelCache.clear();
     detailK = Math.pow(2, Math.max(0, Math.floor(Math.log2(st.k || 1))));
     path = makePath(detailK);
-    pathCache = new WeakMap(); boundsCache = new WeakMap();
+    detailJob++; pathCaches = new Map([[detailK, [new WeakMap(), new WeakMap()]]]);
+    [pathCache, boundsCache] = pathCaches.get(detailK);
     drawStatic();
     renderViews();
     scheduleRelief(true);
@@ -206,7 +263,7 @@ function createHistMap(host, opts = {}) {
   }
 
   // --- 陰影起伏を、今の見え方で描きなおす（動かし終わってから） ---
-  let relTok = 0, relTimer = null;
+  let relTok = 0, relTimer = null, relUrl = null;
   function scheduleRelief(now) {
     clearTimeout(relTimer);
     relTimer = setTimeout(renderRelief, now ? 30 : 160);
@@ -217,14 +274,18 @@ function createHistMap(host, opts = {}) {
     // 細かさ：画面の1ピクセルが何度か
     const a = pr.invert(t.invert([W / 2, H / 2])), b = pr.invert(t.invert([W / 2 + 20, H / 2]));
     const dpp = a && b ? Math.hypot(b[0] - a[0], b[1] - a[1]) / 20 : 1;
-    const scale = dpp > 0.15 ? 0.5 : dpp > 0.06 ? 0.75 : 1;   // 世界全体のときは、半分の細かさで十分
+    const scale = dpp > 0.15 ? 0.5 : 0.75;   // 影はぼんやりしたものなので、画面より少しあらくて十分   // 世界全体のときは、半分の細かさで十分
     const RW = Math.round(W * scale), RH = Math.round(H * scale);
     const inv = (x, y) => { const q = t.invert([x / scale, y / scale]); const ll = pr.invert(q); if (!ll || !isFinite(ll[0])) return null; const back = pr(ll); return back && Math.abs(back[0] - q[0]) < 2 && Math.abs(back[1] - q[1]) < 2 ? ll : null; };
     const c = await RELIEF.render(RW, RH, inv, dpp < 0.07, () => tok !== relTok);
     if (!c || tok !== relTok) return;
     const x0 = t.invert([0, 0]), x1 = t.invert([W, H]);
+    // 画像にするのも、待ち時間に（toDataURL より軽い）
+    const url = await new Promise(r => c.toBlob(b => r(b ? URL.createObjectURL(b) : null), 'image/jpeg', 0.85));
+    if (!url || tok !== relTok) { if (url) URL.revokeObjectURL(url); return; }
+    if (relUrl) URL.revokeObjectURL(relUrl); relUrl = url;
     gRel.selectAll('*').remove();
-    gRel.append('image').attr('href', c.toDataURL('image/jpeg', 0.85)).attr('x', x0[0]).attr('y', x0[1]).attr('width', x1[0] - x0[0]).attr('height', x1[1] - x0[1]).attr('preserveAspectRatio', 'none');
+    gRel.append('image').attr('href', url).attr('x', x0[0]).attr('y', x0[1]).attr('width', x1[0] - x0[0]).attr('height', x1[1] - x0[1]).attr('preserveAspectRatio', 'none');
   }
 
   // --- 地形（山脈・砂漠・高原）と川・湖 ---
@@ -274,18 +335,35 @@ function createHistMap(host, opts = {}) {
 
   // --- 引きの地図（強く拡大したときだけ、右上に小さく） ---
   const inset = $('.hm-inset', root), isvg = d3.select($('svg', inset));
-  inset.addEventListener('click', e => { e.stopPropagation(); svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity); });
+  inset.addEventListener('click', e => { e.stopPropagation(); zsel.transition().duration(500).call(zoom.transform, d3.zoomIdentity); });
   inset.addEventListener('pointerdown', e => e.stopPropagation());
-  let insetKey = '';
-  function drawInset() {
+  let insetKey = '', insetIp = null;
+  // 引きの地図は小さいので、形をあらくしたもの（0.2度より近い点は省く）を使う。一度作ったらとっておく
+  const liteCache = new WeakMap();
+  function lite(f) {
+    if (!f) return f;
+    let g = liteCache.get(f); if (g) return g;
+    if (!f.geometry && f.coordinates) { const w = lite({ type: 'Feature', properties: {}, geometry: f }); liteCache.set(f, w); return w; }
+    if (!f.geometry) return f;
+    const ring = r => { const o = []; let lx = 1e9, ly = 1e9; r.forEach((p, i) => { if (i === 0 || i === r.length - 1 || Math.abs(p[0] - lx) + Math.abs(p[1] - ly) > 0.2) { o.push(p); lx = p[0]; ly = p[1]; } }); return o.length >= 4 ? o : null; };
+    const poly = c => { const o = c.map(ring); return o[0] ? o.filter(Boolean) : null; };
+    const G = f.geometry, cs = G.type === 'Polygon' ? [G.coordinates] : G.type === 'MultiPolygon' ? G.coordinates : null;
+    if (!cs) { liteCache.set(f, f); return f; }
+    const out = cs.map(poly).filter(Boolean);
+    g = { type: 'Feature', properties: f.properties, geometry: { type: 'MultiPolygon', coordinates: out } };
+    liteCache.set(f, g); return g;
+  }
+  // light：動かしているあいだは、中の地図は作りなおさず、四角だけ動かす（作りなおすのは手をはなしてから）
+  function drawInset(light) {
     if (opts.mini || !pr) return;
-    const show = st.k >= 3.5;
+    const show = st.k >= 3.5, wasHidden = inset.hidden;
     inset.hidden = !show;
     if (!show) return;
     const IW = Math.round(150 * (st.ls || 1)), IH = Math.round(IW * 0.66);
     // 拡大のしかたに合わせて、引きの地図の範囲を決める（とても強い拡大なら地域、そうでなければ今の範囲全体）
     const c = pr.invert(st.t.invert([st.w / 2, st.h / 2]));
     if (!c) return;
+    if (light && insetIp && !wasHidden) { insetBox(insetIp, c); return; }
     const spanNow = (() => { const a = pr.invert(st.t.invert([0, st.h / 2])), b = pr.invert(st.t.invert([st.w, st.h / 2])); return a && b ? Math.abs(b[0] - a[0]) || 1 : 10; })();
     const ispan = clamp(spanNow * 9, 16, 80);
     const key = [Math.round(c[0] / (ispan / 6)), Math.round(c[1] / (ispan / 6)), Math.round(ispan), IW, st.year].join(',');
@@ -294,15 +372,21 @@ function createHistMap(host, opts = {}) {
     const ipath = d3.geoPath({ stream: out => ip.stream({ _x: NaN, _y: NaN, _n: 0, point(x, y) { if (this._n++ === 0 || Math.abs(x - this._x) + Math.abs(y - this._y) >= 1) { this._x = x; this._y = y; out.point(x, y); } }, lineStart() { this._n = 0; out.lineStart(); }, lineEnd() { out.lineEnd(); }, polygonStart() { out.polygonStart(); }, polygonEnd() { out.polygonEnd(); }, sphere() { out.sphere && out.sphere(); } }) });   // 小さい地図なので、1ピクセルより細かい点はとばす
     isvg.attr('width', IW).attr('height', IH).attr('viewBox', `0 0 ${IW} ${IH}`);
     if (key !== insetKey) {
-      insetKey = key;
+      insetKey = key; insetIp = ip;
       isvg.selectAll('*').remove();
       isvg.append('rect').attr('class', 'in-sea').attr('width', IW).attr('height', IH);
-      isvg.append('path').attr('class', 'in-land').attr('d', ipath(GEO.world().land));
-      isvg.append('g').selectAll('path').data(feats).join('path').attr('class', 'in-pol').attr('d', ipath).attr('fill', f => f.properties.p.color || '#888');
+      isvg.append('path').attr('class', 'in-land').attr('d', ipath(lite(GEO.world().land)));
+      isvg.append('g').selectAll('path').data(feats).join('path').attr('class', 'in-pol').attr('d', f => ipath(lite(f))).attr('fill', f => f.properties.p.color || '#888');
       isvg.append('g').attr('class', 'in-labs');
       isvg.append('path').attr('class', 'in-box');
       isvg.append('circle').attr('class', 'in-dot').attr('r', 3.5);
+      // 大きな国の名前を少しだけ（作りなおすときだけ計算する）
+      const labs = feats.filter(f => (f.properties.p.rank || 2) <= 2).sort((a, b) => (a.properties.p.rank || 2) - (b.properties.p.rank || 2) || d3.geoArea(lite(b)) - d3.geoArea(lite(a))).map(f => { const q = ip(d3.geoCentroid(lite(f))); return q && q[0] > 8 && q[0] < IW - 8 && q[1] > 6 && q[1] < IH - 4 ? { n: f.properties.p.name, q } : null; }).filter(Boolean).slice(0, 4);
+      isvg.select('.in-labs').selectAll('text').data(labs).join('text').attr('x', d => d.q[0]).attr('y', d => d.q[1]).text(d => d.n);
     }
+    insetBox(insetIp, c);
+  }
+  function insetBox(ip, c) {
     // いま見ている範囲の四角
     const pts = [[0, 0], [st.w / 2, 0], [st.w, 0], [st.w, st.h / 2], [st.w, st.h], [st.w / 2, st.h], [0, st.h], [0, st.h / 2]]
       .map(q => pr.invert(st.t.invert(q))).filter(Boolean).map(ll => ip(ll)).filter(Boolean);
@@ -311,9 +395,6 @@ function createHistMap(host, opts = {}) {
     isvg.select('.in-box').attr('d', pts.length > 2 && !small ? d3.line()(pts) + 'Z' : null);
     const cc = ip(c);
     isvg.select('.in-dot').attr('cx', cc ? cc[0] : -10).attr('cy', cc ? cc[1] : -10).style('display', small ? null : 'none');
-    // 大きな国の名前を少しだけ
-    const labs = feats.filter(f => (f.properties.p.rank || 2) <= 2).sort((a, b) => (a.properties.p.rank || 2) - (b.properties.p.rank || 2) || d3.geoArea(b) - d3.geoArea(a)).map(f => { const q = ip(d3.geoCentroid(f)); return q && q[0] > 8 && q[0] < IW - 8 && q[1] > 6 && q[1] < IH - 4 ? { n: f.properties.p.name, q } : null; }).filter(Boolean).slice(0, 4);
-    isvg.select('.in-labs').selectAll('text').data(labs).join('text').attr('x', d => d.q[0]).attr('y', d => d.q[1]).text(d => d.n);
   }
 
   // --- 名前の位置（いちばん大きい部分のまん中） ---
@@ -812,10 +893,10 @@ function createHistMap(host, opts = {}) {
       const k1 = Math.max(1, Math.min(st.t.k, k) / 3);
       const mid = [ (st.t.invertX(st.w / 2) + q[0]) / 2, (st.t.invertY(st.h / 2) + q[1]) / 2 ];
       const t1 = d3.zoomIdentity.translate(st.w / 2 - k1 * mid[0], st.h / 2 - k1 * mid[1]).scale(k1);
-      svg.interrupt().transition().duration(dur * 0.45).ease(d3.easeCubicInOut).call(zoom.transform, t1)
+      zsel.interrupt().transition().duration(dur * 0.45).ease(d3.easeCubicInOut).call(zoom.transform, t1)
         .transition().duration(dur * 0.55).ease(d3.easeCubicInOut).call(zoom.transform, tt);
-    } else if (dur > 0) svg.interrupt().transition().duration(dur).ease(d3.easeCubicInOut).call(zoom.transform, tt);
-    else svg.call(zoom.transform, tt);
+    } else if (dur > 0) zsel.interrupt().transition().duration(dur).ease(d3.easeCubicInOut).call(zoom.transform, tt);
+    else zsel.call(zoom.transform, tt);
   }
 
   function select(s) {
@@ -945,7 +1026,7 @@ function createHistMap(host, opts = {}) {
     st.view = v;
     labelCache.clear();
     buildBase();
-    if (!keepZoom) { st.t = d3.zoomIdentity; svg.call(zoom.transform, d3.zoomIdentity); }
+    if (!keepZoom) { st.t = d3.zoomIdentity; zsel.call(zoom.transform, d3.zoomIdentity); }
     draw();
     if (opts.onView) opts.onView(v);
   }
