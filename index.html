@@ -206,6 +206,14 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .hm-speed button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .hm-views { position: absolute; left: 8px; bottom: 8px; right: 50px; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .hm-views::-webkit-scrollbar { display: none; }
+/* 地域のボタン：ふだんはかくす。地図を動かしたときなどに、うすく出てしばらくして消える */
+.hm-views { opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .35s, transform .35s; }
+.hm.views-show .hm-views { opacity: .82; transform: none; pointer-events: auto; }
+.hm.views-show .hm-views:hover, .hm.views-show .hm-views:focus-within { opacity: 1; }
+.hm-views .chip.near { border-color: var(--ai); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ai) 45%, transparent); }
+.hm-views .chip.near::before { content: '→ '; }
+.hm.views-show .regbtn { background: var(--ink); color: var(--panel); }
+.hm-tools .regbtn { font-size: 16px; }
 .hm-views .chip { box-shadow: 0 1px 2px rgba(0,0,0,.1); }
 .hm-tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,.15); max-width: 260px; z-index: 5; }
 .hm-bar { border-top: 1px solid var(--line); padding: 8px 12px 10px; display: grid; gap: 6px; background: var(--panel); flex: none; }

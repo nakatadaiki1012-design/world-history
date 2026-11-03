@@ -17,6 +17,7 @@ function createHistMap(host, opts = {}) {
         <button type="button" data-z="in" aria-label="拡大">＋</button>
         <button type="button" data-z="out" aria-label="縮小">－</button>
         <button type="button" data-z="reset" aria-label="元の大きさ">⟲</button>
+        <button type="button" class="regbtn" aria-label="見る地域を変える" title="見る地域を変える">🌐</button>
         <button type="button" class="gear" aria-label="表示の設定" aria-expanded="false">⚙</button>
       </div>
       <div class="hm-set" hidden>
@@ -92,18 +93,50 @@ function createHistMap(host, opts = {}) {
   // --- 見る範囲のボタン（大きな地域。えらぶと、その中のくわしい範囲も出る） ---
   const viewsBox = $('.hm-views', root);
   const topOf = v => (GEO.VIEWS[v] && GEO.VIEWS[v].parent) || v;
+  // 地域のボタンは、ふだんはかくしておく。地図を動かしたときや 🌐 をおしたときだけ、うすく出して、しばらくしたら消す
+  let viewsTimer = null, viewsHover = false;
+  function showViews(ms) {
+    if (opts.mini) return;
+    root.classList.add('views-show');
+    clearTimeout(viewsTimer);
+    viewsTimer = setTimeout(() => { if (!viewsHover) root.classList.remove('views-show'); }, ms || 4000);
+  }
+  function hideViews() { clearTimeout(viewsTimer); root.classList.remove('views-show'); }
+  viewsBox.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') { viewsHover = true; clearTimeout(viewsTimer); } });
+  viewsBox.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') { viewsHover = false; showViews(2500); } });
+  viewsBox.addEventListener('pointerdown', () => showViews(5000));
+  viewsBox.addEventListener('scroll', () => { if (root.classList.contains('views-show')) showViews(4000); }, { passive: true });
+  $('.regbtn', root).addEventListener('click', e => { e.stopPropagation(); if (root.classList.contains('views-show')) hideViews(); else { markNear(); showViews(7000); } });
+  // いま見ている場所にいちばん合う地域のボタンに、印をつける
+  function markNear() {
+    $$('.chip.near', viewsBox).forEach(b => b.classList.remove('near'));
+    if (!pr || st.k < 1.6) return;
+    const c = pr.invert(st.t.invert([st.w / 2, st.h / 2])); if (!c) return;
+    let best = null, bestA = Infinity;
+    Object.entries(GEO.VIEWS).forEach(([k, v]) => {
+      if (k === 'world' || !v.bbox) return;
+      const [x0, y0, x1, y1] = v.bbox, lon = c[0] < x0 ? c[0] + 360 : c[0];
+      if (lon < x0 || lon > x1 || c[1] < y0 || c[1] > y1) return;
+      const a = (x1 - x0) * (y1 - y0); if (a < bestA) { bestA = a; best = k; }
+    });
+    if (!best || best === st.view) return;
+    const b = $(`.chip[data-k="${best}"]`, viewsBox) || $(`.chip[data-k="${topOf(best)}"]`, viewsBox);
+    if (!b || b.classList.contains('on')) return;
+    b.classList.add('near');
+    viewsBox.scrollLeft = Math.max(0, b.offsetLeft - 60);
+  }
   function renderViews() {
     viewsBox.innerHTML = '';
     const cur = topOf(st.view);
     Object.entries(GEO.VIEWS).filter(([, v]) => !v.parent).forEach(([k, v]) => {
-      const b = el(`<button type="button" class="chip${k === cur ? ' on' : ''}">${v.name}</button>`);
-      b.addEventListener('click', () => setView(k));
+      const b = el(`<button type="button" class="chip${k === cur ? ' on' : ''}" data-k="${k}">${v.name}</button>`);
+      b.addEventListener('click', () => { setView(k); showViews(2500); });
       viewsBox.appendChild(b);
       if (k !== cur) return;
       const subs = Object.entries(GEO.VIEWS).filter(([, x]) => x.parent === k);
       subs.forEach(([sk, sv]) => {
-        const sb = el(`<button type="button" class="chip sub${sk === st.view ? ' on' : ''}">${sv.name}</button>`);
-        sb.addEventListener('click', () => setView(sk === st.view ? k : sk));
+        const sb = el(`<button type="button" class="chip sub${sk === st.view ? ' on' : ''}" data-k="${sk}">${sv.name}</button>`);
+        sb.addEventListener('click', () => { setView(sk === st.view ? k : sk); showViews(2500); });
         viewsBox.appendChild(sb);
       });
     });
@@ -150,8 +183,10 @@ function createHistMap(host, opts = {}) {
     gZoom.attr('transform', st.t);
     updateTerrain(); placeOverlay();
   }
-  zoom.on('end.relief', () => { endGest(); updateDetail(); drawInset(); scheduleRelief(); });
+  zoom.on('end.relief', ev => { endGest(); updateDetail(); drawInset(); scheduleRelief(); if (ev.sourceEvent) { markNear(); showViews(4000); } });
   zsel.call(zoom).on('dblclick.zoom', null);
+  // 最初に少しだけ見せて、ここにあることを知らせる
+  setTimeout(() => showViews(3500), 300);
   $$('.hm-tools button[data-z]', root).forEach(b => b.addEventListener('click', () => {
     const z = b.dataset.z;
     if (z === 'reset') zsel.transition().duration(350).call(zoom.transform, d3.zoomIdentity);
