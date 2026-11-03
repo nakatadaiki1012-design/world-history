@@ -306,7 +306,7 @@ function createHistMap(host, opts = {}) {
 
     // 人物
     shownPeople = st.story ? st.story.people.map(id => PERSON[id]).filter(Boolean).map(p => ({ p, pl: GEO.placeAt(p, clamp(y, p.born, p.died)) })).filter(x => x.pl)
-      : st.layers.people ? PEOPLE.map(p => ({ p, pl: GEO.placeAt(p, y) })).filter(x => x.pl) : [];
+      : st.layers.people ? PEOPLE.filter(p => y - p.born >= 15).map(p => ({ p, pl: GEO.placeAt(p, y) })).filter(x => x.pl) : [];   // 子どものころは出さない（活躍する年れいから）
     if (sel && sel.type === 'person' && !shownPeople.some(x => x.p.id === sel.id)) {
       const p = PERSON[sel.id];
       if (p) { const pl = GEO.placeAt(p, clamp(y, p.born, p.died)); if (pl) shownPeople.push({ p, pl, ghost: true }); }
