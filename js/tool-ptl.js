@@ -165,7 +165,8 @@ registerTool('ptl', {
           <p>${esc(p.text || '')}</p>
           ${p.keys ? `<div class="keys">${p.keys.map(k => `<span>${esc(k)}</span>`).join('')}</div>` : ''}
         </div>`));
-        body.appendChild(el(`<a class="btn primary" style="display:inline-block;text-decoration:none;margin:6px 0" href="${mapHash(fixYear(Math.round((p.born + p.died) / 2)), REGION_VIEW[p.region] || 'world', 'p:' + p.id)}">🗺 地図で足あとを見る</a>`));
+        if (hasProfile(p.id)) body.appendChild(profileBtn(p.id));
+        body.appendChild(el(`<a class="btn${hasProfile(p.id) ? '' : ' primary'}" style="display:inline-block;text-decoration:none;margin:6px 0" href="${mapHash(fixYear(Math.round((p.born + p.died) / 2)), REGION_VIEW[p.region] || 'world', 'p:' + p.id)}">🗺 地図で足あとを見る</a>`));
         body.appendChild(el('<h3>一生の足あと</h3>'));
         const ol = el('<ol class="places"></ol>');
         (p.places || []).forEach(pl => ol.appendChild(el(`<li><b>${esc(yearLabel(pl.from))}〜</b>${esc(pl.name)}${pl.note ? `<div class="muted" style="font-size:12.5px">${esc(pl.note)}</div>` : ''}</li>`)));

@@ -42,6 +42,12 @@ const EVENTS = (() => { const seen = new Set(); return (window.EVENTS || []).fil
 const LESSONS = (window.LESSONS || []).filter(l => l && l.id);
 const PORTRAITS = window.PORTRAITS || {};
 const STORIES = (window.STORIES || []).filter(s => s && s.id && s.steps && s.steps.length);
+// 物語の「語り」（おもしろく話す版）を場面にくっつける
+(function () { const T = window.STORY_TALK || {}; STORIES.forEach(s => { const a = T[s.id]; if (a) s.steps.forEach((st, i) => { if (a[i] && !st.talk) st.talk = a[i]; }); }); })();
+const PERSON_DETAIL = window.PERSON_DETAIL || {};
+const EVENT_FUN = window.EVENT_FUN || {};
+const ERA_BINS = [[-9999, 500, '古代'], [500, 1500, '中世'], [1500, 1800, '近世'], [1800, 1914, '近代'], [1914, 9999, '現代']];
+const eraOf = y => (ERA_BINS.find(b => y >= b[0] && y < b[1]) || ERA_BINS[0])[2];
 const STORY = Object.fromEntries(STORIES.map(s => [s.id, s]));
 
 // --- 画像資料（ウィキメディア・コモンズから読みこむ。ネットにつながっていないときは出さない） ---
@@ -52,6 +58,11 @@ function figureHtml(key, max = 1) {
   const ms = (IMAGES[key] || []).slice(0, max);
   return ms.map(m => `<figure class="fig"><img src="${esc(commonsUrl(m.file, 480))}" data-big="${esc(commonsUrl(m.file, 1400))}" alt="${esc(m.what || '')}" loading="lazy" onerror="this.closest('figure').remove()">
     <figcaption>${esc(m.what || '')}<span class="credit">${m.artist ? esc(m.artist) + '・' : ''}${esc(m.license || '')}・<a href="${esc(m.page || '#')}" target="_blank" rel="noopener">コモンズ</a></span></figcaption></figure>`).join('');
+}
+// 一覧のカード用の小さな画像（リンクを入れない）
+function thumbHtml(key) {
+  const m = (IMAGES[key] || [])[0];
+  return m ? `<img class="thumbimg" src="${esc(commonsUrl(m.file, 360))}" alt="" loading="lazy" onerror="this.remove()">` : '';
 }
 // 画像をおすと大きく
 document.addEventListener('click', e => {

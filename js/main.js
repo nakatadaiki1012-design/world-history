@@ -1,6 +1,6 @@
 /* 画面の切りかえ（地図と年表／挑戦／授業モード）と、URL の # による直接リンク */
 const GROUPS = [
-  { id: 'see', name: '地図と年表', secs: [['map', '🗺 歴史地図'], ['stories', '▶ できごとを追う'], ['chrono', '年表'], ['ptl', '人物年表'], ['econ', '人口と経済'], ['people', '人物図鑑']] },
+  { id: 'see', name: '地図と年表', secs: [['map', '🗺 歴史地図'], ['stories', '▶ できごとを追う'], ['events', '出来事'], ['chrono', '年表'], ['ptl', '人物年表'], ['econ', '人口と経済'], ['people', '人物図鑑']] },
   { id: 'try', name: '挑戦', secs: [['quiz', 'クイズ']] },
   { id: 'class', name: '授業<span class="lbl">モード</span>', secs: [['lessons/sogo', '歴史総合'], ['lessons/tankyu', '世界史探究']] }
 ];

@@ -234,6 +234,7 @@ registerTool('map', {
         ${ph ? `<div class="credit">肖像：${esc(ph.what || '')}${ph.artist ? '（' + esc(ph.artist) + '）' : ''}・${esc(ph.license || '')}・<a href="${esc(ph.page || '#')}" target="_blank" rel="noopener">ウィキメディア・コモンズ</a></div>` : ''}
       </div>`));
       if (IMAGES['person:' + p.id]) body.appendChild(el(`<div>${figureHtml('person:' + p.id, 2)}</div>`));
+      if (hasProfile(p.id)) body.appendChild(profileBtn(p.id));
       const pairs = [[`⏮ 生まれた年`, () => map.setYear(p.born)], [`⏭ 亡くなった年`, () => map.setYear(p.died)]];
       pairs.push([`▶ 一生をたどる`, () => playLife(p)]);
       if (pol) pairs.push([`${esc(pol.name)}を見る`, () => map.select({ type: 'polity', id: pol.id })]);
@@ -277,6 +278,7 @@ registerTool('map', {
       </div>`));
       const idx = EVENT_IDX[e.title];
       body.appendChild(el(`<div>${figureHtml('event:' + e.title)}</div>`));
+      if (EVENT_FUN[e.title]) body.appendChild(el(`<div class="ev-fun">💡 <b>ここがおもしろい</b>　${esc(EVENT_FUN[e.title])}</div>`));
       body.appendChild(jumpBtns([[`この年へ（${esc(yearLabel(e.year))}）`, () => map.setYear(e.year)]]));
       whySection(idx);
       // その年に生きていた、近くの人物
@@ -312,10 +314,13 @@ registerTool('map', {
     }
     // 場面の読み上げ用の文
     const stepSpeech = s => `${yearLabel(s.year)}${s.date ? '、' + s.date : ''}。${s.title}。${s.text || ''}${s.why ? '。' + s.why : ''}`;
+    // 「おもしろ語り」：場面に talk（くだけた語り）があれば、テロップと読み上げはそちらを使う
+    let talkMode = store.get('talkMode', true);
+    const stepBody = s => (talkMode && s.talk) ? s.talk : (s.text || '');
     // 場面を文ごとに読み、読んでいる文をテロップで光らせる
     const clearReading = () => $$('.hm-caption .reading').forEach(x => x.classList.toggle('reading', false));
     function speakStep(s, onend) {
-      const sents = SPEECH.sentences(s.text || '');
+      const sents = SPEECH.sentences(stepBody(s));
       const parts = [`${yearLabel(s.year)}${s.date ? '、' + s.date : ''}。${s.title}。`, ...sents];
       const marks = ['.cap-title', ...sents.map((x, i) => `.cap-s[data-i="${i}"]`)];
       if (s.why) { parts.push('つながり。' + s.why.replace(/^[^：]*：/, '')); marks.push('.cap-why'); }
@@ -337,12 +342,13 @@ registerTool('map', {
         <div class="cap-top"><span class="cap-story">${esc(story.title)}</span><span class="cap-n num">${si + 1} / ${n}</span></div>
         <div class="cap-when"><span class="num">${esc(yearLabel(s.year))}</span>${s.date ? ' ' + esc(s.date) : ''}<span>📍 ${esc(s.place || '')}</span></div>
         <div class="cap-title">${esc(s.title)}</div>
-        <div class="cap-text">${SPEECH.sentences(s.text || '').map((x, i) => `<span class="cap-s" data-i="${i}">${esc(x)}</span>`).join('')}${s.why ? `<div class="cap-why">🔗 ${esc(s.why)}</div>` : ''}</div>
+        <div class="cap-text${talkMode && s.talk ? ' talk' : ''}">${SPEECH.sentences(stepBody(s)).map((x, i) => `<span class="cap-s" data-i="${i}">${esc(x)}</span>`).join('')}${s.why ? `<div class="cap-why">🔗 ${esc(s.why)}</div>` : ''}</div>
         <div class="cap-ctl">
           <button type="button" data-a="prev" ${si === 0 ? 'disabled' : ''} aria-label="前の場面">◀</button>
           <button type="button" data-a="play" class="pl" aria-label="${playing ? '止める' : '自動で進む'}">${playing ? '❚❚' : '▶'}</button>
           <button type="button" data-a="next" ${si === n - 1 ? 'disabled' : ''} aria-label="次の場面">▶▶</button>
           <button type="button" data-a="tts" class="${SPEECH.on ? 'on' : ''}" ${SPEECH.ok ? '' : 'disabled'} aria-label="音声で読み上げ">${SPEECH.on ? '🔊' : '🔈'}<span class="lbl2"> 読み上げ</span></button>
+          ${s.talk ? `<button type="button" data-a="talk" class="${talkMode ? 'on' : ''}" aria-label="語り口の切りかえ">${talkMode ? '🎙 おもしろ語り' : '📄 ふつうの説明'}</button>` : ''}
           <button type="button" data-a="size" aria-label="テロップの大きさ">${small ? '▴' : '▾'}</button>
           <button type="button" data-a="end" aria-label="物語をおわる">✕</button>
         </div>
@@ -361,6 +367,7 @@ registerTool('map', {
       else if (a === 'next') goStep(si + 1);
       else if (a === 'end') endStory();
       else if (a === 'size') { store.set('capSmall', !store.get('capSmall', false)); renderCaption(); }
+      else if (a === 'talk') { talkMode = !talkMode; store.set('talkMode', talkMode); renderSideNow(); if (SPEECH.on) { if (playing) schedule(); else speakStep(story.steps[si]); } }
       else if (a === 'tts') {
         SPEECH.setOn(!SPEECH.on);
         if (SPEECH.on) { if (playing) schedule(); else speakStep(story.steps[si]); }
@@ -404,7 +411,7 @@ registerTool('map', {
         return;
       }
       SPEECH.stop();
-      const ms = 5200 + (s.text || '').length * 45;
+      const ms = 5200 + stepBody(s).length * 45;
       stTimer = setTimeout(nextOrEnd, ms);
     }
     function storyPanel() {
@@ -419,6 +426,7 @@ registerTool('map', {
           <h3 class="st-title">${si + 1}．${esc(s.title)}</h3>
           ${figureHtml(s.imageKey || `story:${story.id}:${si + 1}`)}
           <p>${esc(s.text || '')}</p>
+          ${s.talk ? `<div class="st-talk"><b>🎙 語り</b>${esc(s.talk)}</div>` : ''}
           ${s.why ? `<div class="st-why">🔗 ${esc(s.why)}</div>` : ''}
           <div class="st-people"></div>
         </div>
@@ -493,32 +501,4 @@ registerTool('map', {
   }
 });
 
-// 物語の一覧
-registerTool('stories', {
-  name: 'できごとを追う',
-  render(main) {
-    main.appendChild(el(`<div class="course-head"><h2>できごとを追う</h2><div class="muted" style="font-size:13.5px">1つのできごとを、地図を動かしながら順に追います。えらぶと地図が開き、自動で進みます（◀ ▶ で1場面ずつ）。</div></div>`));
-    const f = el('<div class="filters" style="max-width:980px;margin:0 auto 10px"></div>');
-    let c = '';
-    const grid = el('<div class="pgrid" style="max-width:980px;margin:0 auto"></div>');
-    [['', 'すべて'], ['sogo', '歴史総合'], ['tankyu', '世界史探究']].forEach(([k, n]) => {
-      const b = el(`<button type="button" class="chip" aria-pressed="${k === c}">${n}</button>`);
-      b.addEventListener('click', () => { c = k; $$('button', f).forEach(x => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true'); list(); });
-      f.appendChild(b);
-    });
-    function list() {
-      grid.innerHTML = '';
-      STORIES.filter(s => !c || (s.tags || []).includes(c)).forEach(s => {
-        const col = (REGION[s.region] || {}).color || '#555';
-        grid.appendChild(el(`<a class="pcard" style="--c:${col};text-decoration:none;color:inherit" href="#story/${esc(s.id)}/1">
-          <b>▶ ${esc(s.title)}</b>
-          <span class="m">${esc(s.period || '')}・${s.steps.length}場面・${esc((REGION[s.region] || {}).name || '')}</span>
-          <span class="t">${esc(s.summary || '')}</span>
-        </a>`));
-      });
-      if (!grid.children.length) grid.appendChild(el('<p class="empty">物語のデータがまだありません。</p>'));
-    }
-    main.appendChild(f); main.appendChild(grid); list();
-  }
-});
 registerTool('story', { name: '物語', render(main, params) { return TOOLS.map.render(main, params); } });

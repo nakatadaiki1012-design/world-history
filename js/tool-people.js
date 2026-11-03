@@ -45,8 +45,10 @@ registerTool('people', {
           <span>${portraitImg(p)}<b>${esc(p.name)}</b></span>
           <span class="m">${esc(p.role || '')}・<span class="num">${esc(lifeSpan(p))}</span></span>
           <span class="t">${esc(p.text || '')}</span>
+          ${hasProfile(p.id) ? '<button type="button" class="pbadge">📖 もっと詳しく</button>' : ''}
           <span class="m">📍 ${esc((p.places || []).map(x => x.name).filter((v, i, a) => a.indexOf(v) === i).slice(0, 4).join(' → '))}</span>
         </a>`);
+        const pb = a.querySelector('.pbadge'); if (pb) pb.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openProfile(p.id); });
         grid.appendChild(a);
       });
     }

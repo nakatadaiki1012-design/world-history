@@ -731,7 +731,7 @@ function createHistMap(host, opts = {}) {
   }
   // --- 表示の設定（⚙） ---
   const setBox = $('.hm-set', root), gear = $('.gear', root);
-  const ui = Object.assign({ views: true, eras: true }, store.get('mapUI', {}));
+  const ui = Object.assign({ views: true, eras: false }, store.get('mapUI', {}));
   const applyUI = () => {
     viewsBox.style.display = ui.views ? '' : 'none';
     const er = $('.hm-eras', root); if (er) er.style.display = ui.eras ? '' : 'none';
