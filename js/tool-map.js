@@ -21,7 +21,7 @@ registerTool('map', {
       if (story && !story.generated) { history.replaceState(null, '', `#story/${story.id}/${si + 1}`); return; }
       if (story) { history.replaceState(null, '', mapHash(map.year, map.view)); return; }
       const s = map.sel;
-      const extra = !s ? '' : s.type === 'person' ? 'p:' + s.id : s.type === 'polity' ? 's:' + s.id : 'e:' + s.id;
+      const extra = !s ? '' : s.type === 'person' ? 'p:' + s.id : s.type === 'polity' ? 's:' + s.id : s.type === 'place' ? 'pl:' + s.id : 'e:' + s.id;
       history.replaceState(null, '', mapHash(map.year, map.view, extra));
     }
 
@@ -49,6 +49,7 @@ registerTool('map', {
       if (s && s.type === 'polity' && POLITY[s.id]) return polityDetail(POLITY[s.id]);
       if (s && s.type === 'person' && PERSON[s.id]) return personDetail(PERSON[s.id]);
       if (s && s.type === 'event' && EVENTS[s.id]) return eventDetail(EVENTS[s.id]);
+      if (s && s.type === 'place' && PLACE[s.id]) return placeDetail(PLACE[s.id]);
       if (tab === 'year') yearTab();
       else if (tab === 'people') peopleTab();
       else if (tab === 'events') eventsTab();
@@ -173,6 +174,46 @@ registerTool('map', {
         body.appendChild(whyList(rs, 'down'));
       }
       if (!cs.length && !rs.length) body.appendChild(el('<p class="muted" style="font-size:13px">この出来事の原因・結果のつながりは、まだデータにありません。</p>'));
+    }
+
+    // 歴史的な地名：時代ごとの名前・都にした国・この地の出来事・ゆかりの人物
+    function placeDetail(pl) {
+      body.appendChild(back());
+      const nm = placeNameAt(pl, map.year);
+      { const r = el('<div style="float:right"></div>'); r.appendChild(speakBtn(() => `${nm ? nm.name : pl.modern}。今の${pl.modern}。${pl.text || ''}`)); body.appendChild(r); }
+      body.appendChild(el(`<div>
+        <div class="muted" style="font-size:13px">◇ 地名・${esc((REGION[pl.region] || {}).name || '')}</div>
+        <h2>${esc(nm ? nm.name : pl.modern)}</h2>
+        <div class="muted">今の名前：${esc(pl.modern || '')}</div>
+        ${figureHtml('place:' + pl.id)}
+        <p>${esc(pl.text || '')}</p>
+        ${pl.fun ? `<div class="ev-fun">💡 <b>ここがおもしろい</b>　${esc(pl.fun)}</div>` : ''}
+      </div>`));
+      body.appendChild(el('<h3>名前のうつりかわり（おすとその年へ）</h3>'));
+      const ol = el('<ol class="places"></ol>');
+      pl.names.forEach(n => {
+        const li = el(`<li class="${n === nm ? 'now' : ''}"><b>${esc(yearLabel(n.from))}〜${n.to >= 2025 ? '今' : esc(yearLabel(n.to))}</b>${esc(n.name)}${n.note ? `<div class="muted" style="font-size:12.5px">${esc(n.note)}</div>` : ''}</li>`);
+        li.addEventListener('click', () => map.setYear(Math.max(n.from, YEAR_MIN)));
+        ol.appendChild(li);
+      });
+      body.appendChild(ol);
+      const near = (lon, lat) => Math.hypot((lon - pl.lon) * Math.cos(pl.lat * Math.PI / 180), lat - pl.lat) < 0.45;
+      const nearCap = (lon, lat) => Math.hypot((lon - pl.lon) * Math.cos(pl.lat * Math.PI / 180), lat - pl.lat) < 0.2;
+      const caps = POLITIES.filter(p => (p.rank || 2) <= 2 && (p.capitals || (p.capital ? [Object.assign({ from: p.start, to: p.end }, p.capital)] : [])).some(c => nearCap(c.lon, c.lat))).sort((a, b) => a.start - b.start);
+      if (caps.length) {
+        body.appendChild(el('<h3>ここを都にした国・王朝</h3>'));
+        const ul = el('<ul class="lst"></ul>'); caps.forEach(p => ul.appendChild(polityItem(p))); body.appendChild(ul);
+      }
+      const evs = EVENTS.map((e, i) => ({ e, i })).filter(({ e }) => near(e.lon, e.lat)).slice(0, 25);
+      if (evs.length) {
+        body.appendChild(el(`<h3>この地で起きた出来事（${evs.length}）</h3>`));
+        const ul = el('<ul class="lst"></ul>'); evs.forEach(({ e, i }) => ul.appendChild(eventItem(e, i))); body.appendChild(ul);
+      }
+      const ppl = PEOPLE.filter(p => (p.places || []).some(x => near(x.lon, x.lat)));
+      if (ppl.length) {
+        body.appendChild(el(`<h3>ゆかりの人物（${ppl.length}人）</h3>`));
+        const ul = el('<ul class="lst"></ul>'); ppl.slice(0, 20).forEach(p => ul.appendChild(personItem(p))); body.appendChild(ul);
+      }
     }
 
     function polityDetail(p) {
@@ -493,6 +534,7 @@ registerTool('map', {
       if (t === 'p' && PERSON[id]) { map.select({ type: 'person', id }); const pl = GEO.placeAt(PERSON[id], clamp(map.year, PERSON[id].born, PERSON[id].died)); if (pl && !params.view) map.focusOn(pl.lon, pl.lat); }
       else if (t === 's' && POLITY[id]) map.select({ type: 'polity', id });
       else if (t === 'e' && EVENTS[+id]) map.select({ type: 'event', id: +id });
+      else if (t === 'pl' && PLACE[id]) map.select({ type: 'place', id });
       else renderSide();
     } else renderSide();
     syncHash();

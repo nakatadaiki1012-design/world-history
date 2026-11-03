@@ -5,7 +5,7 @@ function createHistMap(host, opts = {}) {
   const st = {
     year: fixYear(opts.year != null ? opts.year : 750),
     view: GEO.VIEWS[opts.view] ? opts.view : 'world',
-    layers: Object.assign({ cap: true, people: true, events: true, modern: false, sphere: true, terrain: true, cities: true }, store.get('layers', {}), opts.layers || {}),
+    layers: Object.assign({ cap: true, people: true, events: true, modern: false, sphere: true, terrain: true, cities: true, places: true }, store.get('layers', {}), opts.layers || {}),
     sel: null,          // { type: 'polity' | 'person' | 'event', id }
     playing: null, speed: 1, w: 0, h: 0, k: 1, t: d3.zoomIdentity
   };
@@ -28,6 +28,7 @@ function createHistMap(host, opts = {}) {
           <label><input type="checkbox" data-l="sphere"> ▨ 勢力圏（斜線）</label>
           <label><input type="checkbox" data-l="modern"> ┄ 現在の国境</label>
           <label><input type="checkbox" data-l="terrain"> ⛰ 地形（山脈・砂漠・川・湖）</label>
+          <label><input type="checkbox" data-l="places"> ◇ 歴史的な地名（その時代の名前）</label>
           <label><input type="checkbox" data-l="cities"> ・ 今の町の名前（拡大したとき）</label>
         </div>
         <div class="hm-set-g"><b>画面</b>
@@ -73,6 +74,7 @@ function createHistMap(host, opts = {}) {
   const gOver = svg.append('g');   // 名前・点（拡大しても大きさが変わらない）
   const gTlab = gOver.append('g');   // 地形・町の名前（いちばん下）
   const gStory = gOver.append('g');
+  const gPlc = gOver.append('g');
   const gTrail = gOver.append('g'), gLab = gOver.append('g'), gCap = gOver.append('g'), gEv = gOver.append('g'), gPeo = gOver.append('g');
   const uid = 'hm' + Math.random().toString(36).slice(2, 8);
   svg.append('defs').append('clipPath').attr('id', uid + 'pc').append('circle').attr('r', 11);
@@ -349,7 +351,7 @@ function createHistMap(host, opts = {}) {
   // 2) 名前は大事なものから順に、候補の位置を試して、何とも重ならない所にだけ出す
   function placeOverlay() {
     if (!pr) return;
-    if (opts.mini) { gLab.selectAll('*').remove(); gCap.selectAll('*').remove(); gEv.selectAll('*').remove(); gPeo.selectAll('*').remove(); gTrail.selectAll('*').remove(); return; }
+    if (opts.mini) { gPlc.selectAll('*').remove(); gLab.selectAll('*').remove(); gCap.selectAll('*').remove(); gEv.selectAll('*').remove(); gPeo.selectAll('*').remove(); gTrail.selectAll('*').remove(); return; }
     const t = st.t, W = st.w, H = st.h, sel = st.sel;
     const PAD = 2;
     const boxes = [];
@@ -364,6 +366,18 @@ function createHistMap(host, opts = {}) {
     // 物語の地点・進路（名前の場所取りより先に）
     const storyLabels = drawStory(boxes);
 
+    // えらんだ地名の名前は、人物などより先に場所をとる
+    let selPlaceBox = null;
+    if (sel && sel.type === 'place' && PLACE[sel.id]) {
+      const pl = PLACE[sel.id], nm = placeNameAt(pl, st.year), q = nm && pr([pl.lon, pl.lat]);
+      if (q) {
+        const [x, y] = t.apply(q), S = st.ls || 1, w = textW(nm.name, 14 * S, true) + 8, h = 17 * S;
+        // 近くに人物がいれば、その輪の上に出す
+        const crowd = shownPeople.some(o => { const qq = pr([o.pl.lon, o.pl.lat]); if (!qq) return false; const [a, b] = t.apply(qq); return Math.hypot(a - x, b - y) < 20; });
+        const off = crowd ? 46 : 8;
+        selPlaceBox = [x - w / 2, y - off - h, x + w / 2, y - off]; selPlaceBox.off = off; boxes.push(selPlaceBox);
+      }
+    }
     // 人物の点（近すぎるものは輪のように広げる）
     const ppl = shownPeople.map(x => {
       const q = pr([x.pl.lon, x.pl.lat]); if (!q) return null;
@@ -382,6 +396,20 @@ function createHistMap(host, opts = {}) {
     });
     ppl.forEach(x => boxes.push([x.sx - x.r, x.sy - x.r, x.sx + x.r, x.sy + x.r]));
 
+    // 歴史的な地名（その年の名前で。都と同じ場所なら、都の名前のかわりにこちらを出す）
+    const plc = [];
+    if (st.layers.places && PLACES.length && !opts.mini) {
+      const lim = t.k < 1.6 && st.view === 'world' ? 1 : t.k < 3 ? 2 : 3;
+      PLACES.forEach(pl => {
+        if ((pl.rank || 2) > lim) return;
+        const nm = placeNameAt(pl, st.year); if (!nm) return;
+        const q = pr([pl.lon, pl.lat]); if (!q) return;
+        const [x, y] = t.apply(q); if (!inView(x, y)) return;
+        if (storyLabels.some(m => Math.hypot(m.x - x, m.y - y) < 14)) return;
+        plc.push({ pl, name: nm.name, x, y, lab: null, sel: sel && sel.type === 'place' && sel.id === pl.id });
+        boxes.push([x - 4, y - 4, x + 4, y + 4]);
+      });
+    }
     // 都の点
     const caps = [];
     if (st.layers.cap) feats.forEach(f => {
@@ -391,7 +419,9 @@ function createHistMap(host, opts = {}) {
       const [x, y] = t.apply(q); if (!inView(x, y)) return;
       if (caps.some(o => Math.hypot(o.x - x, o.y - y) < 5)) return;
       if (storyLabels.some(m => Math.hypot(m.x - x, m.y - y) < 14)) return;   // 物語の地点と同じ場所の都は出さない
-      caps.push({ id: p.id + c.name, name: c.name, x, y, rank: p.rank || 2, lab: null });
+      const merged = plc.find(o => Math.hypot(o.x - x, o.y - y) < 9);
+      if (merged) merged.cap = true;
+      caps.push({ id: p.id + c.name, name: c.name, x, y, rank: p.rank || 2, lab: null, merged: !!merged });
       boxes.push([x - 4, y - 4, x + 4, y + 4]);
     });
     // 出来事の点
@@ -403,7 +433,8 @@ function createHistMap(host, opts = {}) {
 
     // 名前の候補を試す
     function tryPlace(cands) {
-      for (const c of cands) if (c.force || !hit(c.b)) { boxes.push(c.b); return c; }
+      for (const c of cands) if (!hit(c.b)) { boxes.push(c.b); return c; }
+      const f = cands.find(c => c.force); if (f) { boxes.push(f.b); return f; }   // えらんだものは、あいた所がなければ最初の位置に
       return null;
     }
     const side = (x, y, r, w, h, force) => [
@@ -444,9 +475,15 @@ function createHistMap(host, opts = {}) {
       const S = st.ls || 1, s = isSelP(x.p.id), w = textW(x.p.name, 12 * S, false), h = 14 * S;
       jobs.push({ pri: s ? 0 : PORTRAITS[x.p.id] ? 2 : 4, sub: 0, run: () => { x.lab = tryPlace(side(x.sx, x.sy, x.r + 3, w, h, s)); } });
     });
+    plc.forEach(o => {
+      const S = st.ls || 1, w = textW(o.name, 12 * S, true), h = 14 * S;
+      if (o.sel && selPlaceBox) { o.lab = { dx: 0, dy: -selPlaceBox.off - h / 2, a: 'middle' }; return; }
+      jobs.push({ pri: o.sel ? 0 : (o.pl.rank || 2) === 1 ? 4.5 : 4.9, sub: o.pl.rank || 2, run: () => { o.lab = tryPlace(side(o.x, o.y, 6, w, h, o.sel)); } });
+    });
     caps.forEach(c => {
       const S = st.ls || 1, w = textW(c.name, 11 * S, false), h = 13 * S;
       if (!(t.k >= 1.4 || st.view !== 'world' || c.rank === 1)) return;
+      if (c.merged) return;
       jobs.push({ pri: 5, sub: c.rank, run: () => { c.lab = tryPlace(side(c.x, c.y, 6, w, h, false)); } });
     });
     evs.forEach(x => {
@@ -479,6 +516,7 @@ function createHistMap(host, opts = {}) {
       const k = st.k, S = st.ls || 1, maxR = k < 6 ? 2 : k < 12 ? 3 : k < 30 ? 5 : 6;
       window.CITIES.forEach(([n, lon, lat, r]) => {
         if (r > maxR) return;
+        if (plc.some(o => Math.abs(o.pl.lon - lon) < 0.3 && Math.abs(o.pl.lat - lat) < 0.3)) return;   // 歴史的な地名と同じ町は出さない
         const q = pr([lon, lat]); if (!q) return; const [x, y] = t.apply(q); if (!inView(x, y)) return;
         const w = textW(n, 10.5 * S, false), h = 12 * S;
         jobs.push({ pri: 7.6, sub: r, run: () => { const b = [x - 3, y - h / 2, x + 5 + w, y + h / 2]; if (!hit(b)) { boxes.push(b); tlabs.push({ cls: 'tl-city', n, x, y, a: 'start', dot: true }); } } });
@@ -510,6 +548,22 @@ function createHistMap(host, opts = {}) {
       s.attr('x', d.lab.dx).attr('y', d.lab.dy).attr('text-anchor', d.lab.a).text(d.name);
     });
 
+    const ps2 = gPlc.selectAll('g').data(plc, d => d.pl.id);
+    ps2.exit().remove();
+    const pe2 = ps2.enter().append('g').attr('class', 'hm-plc')
+      .on('click', (ev, d) => { ev.stopPropagation(); select({ type: 'place', id: d.pl.id }); })
+      .on('mousemove', (ev, d) => showTip(ev, `<b>${esc(d.name)}</b>${d.pl.modern && d.pl.modern !== d.name ? `（今の${esc(d.pl.modern)}）` : ''}<br><span style="font-size:12px">${esc(d.pl.text || '')}</span>`))
+      .on('mouseleave', hideTip);
+    pe2.append('path').attr('d', 'M0,-4.5L4.5,0L0,4.5L-4.5,0Z');
+    pe2.append('text').attr('dominant-baseline', 'central');
+    const pm2 = pe2.merge(ps2).attr('transform', d => `translate(${d.x},${d.y})`).classed('sel', d => d.sel).classed('cap', d => !!d.cap);
+    pm2.filter(d => d.sel).raise();
+    if (plc.some(d => d.sel)) gPlc.raise(); else gPlc.lower();
+    pm2.select('text').each(function (d) {
+      const s = d3.select(this);
+      if (!d.lab) { s.text(''); return; }
+      s.attr('x', d.lab.dx).attr('y', d.lab.dy).attr('text-anchor', d.lab.a).text(d.name);
+    });
     const vs = gEv.selectAll('g').data(evs, d => d.i);
     vs.exit().remove();
     const ve = vs.enter().append('g').attr('class', 'hm-ev')

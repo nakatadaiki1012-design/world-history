@@ -45,6 +45,17 @@ const STORIES = (window.STORIES || []).filter(s => s && s.id && s.steps && s.ste
 // 物語の「語り」（おもしろく話す版）を場面にくっつける
 (function () { const T = window.STORY_TALK || {}; STORIES.forEach(s => { const a = T[s.id]; if (a) s.steps.forEach((st, i) => { if (a[i] && !st.talk) st.talk = a[i]; }); }); })();
 const PERSON_DETAIL = window.PERSON_DETAIL || {};
+// 歴史的な地名（時代によって名前が変わる町）
+const PLACES = (window.PLACES || []).filter(p => p && p.id && p.names && p.names.length);
+const PLACE = Object.fromEntries(PLACES.map(p => [p.id, p]));
+// その年の名前（その年にあてはまる名前がないときは null）
+function placeNameAt(pl, y) { const n = pl.names.find(n => y >= n.from && y <= n.to); return n || null; }
+// 近くの地名（度で 0.35 くらいまで）
+function nearPlace(lon, lat, d = 0.35) {
+  let best = null, bd = d;
+  PLACES.forEach(p => { const dd = Math.hypot((p.lon - lon) * Math.cos(lat * Math.PI / 180), p.lat - lat); if (dd < bd) { bd = dd; best = p; } });
+  return best;
+}
 const EVENT_FUN = window.EVENT_FUN || {};
 const ERA_BINS = [[-9999, 500, '古代'], [500, 1500, '中世'], [1500, 1800, '近世'], [1800, 1914, '近代'], [1914, 9999, '現代']];
 const eraOf = y => (ERA_BINS.find(b => y >= b[0] && y < b[1]) || ERA_BINS[0])[2];
