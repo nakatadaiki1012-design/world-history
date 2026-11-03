@@ -132,3 +132,5 @@ registerTool('glossary', {
     if (params && params.term && TERM[params.term]) setTimeout(() => openTerm(params.term), 50);
   }
 });
+// 画面を移ったら用語のポップアップを閉じる
+window.addEventListener('hashchange', () => { if (typeof SPEECH !== 'undefined') SPEECH.stop(); $$('.term-ov').forEach(x => x.remove()); });
