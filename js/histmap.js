@@ -274,7 +274,8 @@ function createHistMap(host, opts = {}) {
   const labelCache = new Map();
   function labelPoint(f) {
     const p = f.properties.p;
-    if (p.label) return pr(p.label);
+    // 決めてある名前の位置は、その時代の範囲の中にあるときだけ使う（国が小さくなった時代にずれないように）
+    if (p.label && d3.geoContains(f, p.label)) return pr(p.label);
     const key = st.view + '|' + p.id + '|' + f.properties.s.from;
     if (labelCache.has(key)) return labelCache.get(key);
     let best = null, bestA = -1;
@@ -505,7 +506,7 @@ function createHistMap(host, opts = {}) {
     plc.forEach(o => {
       const S = st.ls || 1, w = textW(o.name, 12 * S, true), h = 14 * S;
       if (o.sel && selPlaceBox) { o.lab = { dx: 0, dy: -selPlaceBox.off - h / 2, a: 'middle' }; return; }
-      jobs.push({ pri: o.sel ? 0 : (o.pl.rank || 2) === 1 ? 4.5 : 4.9, sub: o.pl.rank || 2, run: () => { o.lab = tryPlace(side(o.x, o.y, 6, w, h, o.sel)); } });
+      jobs.push({ pri: o.sel ? 0 : (o.pl.rank || 2) === 1 ? 1.5 : 4.9, sub: o.pl.rank || 2, run: () => { o.lab = tryPlace(side(o.x, o.y, 6, w, h, o.sel).concat(side(o.x, o.y, 17, w, h, false))); } });   // 人物の写真と重なるときは少し外側に
     });
     caps.forEach(c => {
       const S = st.ls || 1, w = textW(c.name, 11 * S, false), h = 13 * S;
