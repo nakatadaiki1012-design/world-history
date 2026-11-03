@@ -164,33 +164,84 @@ function mapHash(year, view, extra) { return `#map/${year}/${view || 'world'}${e
 const SPEECH = {
   ok: typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window,
   on: store.get('tts', false),
-  rate: store.get('ttsRate', 1.05),
+  rate: store.get('ttsRate', 1.0),
+  voiceName: store.get('ttsVoice', ''),
   tok: 0,
+  // 日本語の声を「自然さ」の順に並べる（ニューラル音声 → Google → 高品質版 → そのほか）
+  voices() {
+    if (!this.ok) return [];
+    const score = v => {
+      const n = v.name;
+      if (/Natural|Neural|Online/i.test(n)) return 0;
+      if (/Google/i.test(n)) return 1;
+      if (/Premium|Enhanced|拡張|高品質/i.test(n)) return 2;
+      if (/Kyoko|O-ren|Otoya|Hattori|Nanami|Haruka|Ayumi|Sayaka|Ichiro/i.test(n)) return 3;
+      return 4;
+    };
+    return speechSynthesis.getVoices().filter(v => /^ja/i.test(v.lang)).sort((a, b) => score(a) - score(b) || (b.localService ? 0 : 1) - (a.localService ? 0 : 1));
+  },
   voice() {
-    const vs = speechSynthesis.getVoices().filter(v => /^ja/i.test(v.lang));
-    return vs.find(v => /Google|Nanami|Kyoko|Haruka|Ayumi|O-ren|Otoya/i.test(v.name)) || vs[0] || null;
+    const vs = this.voices();
+    return vs.find(v => v.name === this.voiceName) || vs[0] || null;
   },
-  // 読みやすく：前221年→紀元前221年、チンギス=カン→チンギスカン、〜→から
+  // 歴史の文を、読みまちがえにくい形に
   clean(t) {
-    return String(t || '').replace(/前(\d+)年/g, '紀元前$1年').replace(/前(\d+)/g, '紀元前$1').replace(/[=＝]/g, '').replace(/〜/g, 'から')
-      .replace(/[「」『』]/g, '').replace(/📍|🔗|→/g, '、');
+    let s = String(t || '');
+    s = s.replace(/前(\d+)年/g, '紀元前$1年').replace(/(?<!紀元)前(\d+)/g, '紀元前$1')
+      .replace(/(\d+)〜(\d+)年/g, '$1年から$2年').replace(/〜/g, 'から')
+      .replace(/[=＝・]/g, (m, i) => (m === '・' ? '、' : ''))
+      .replace(/[「」『』]/g, '').replace(/📍|🔗/g, '').replace(/→/g, '、そして、')
+      .replace(/[（(]/g, '、').replace(/[）)]/g, '、')
+      .replace(/、\s*、/g, '、').replace(/、。/g, '。');
+    // 王朝の名前（1文字）：あとに「の・は・が・朝・代…」が続くときだけ、読みをひらがなに
+    const DYN = { 殷: 'いん', 周: 'しゅう', 秦: 'しん', 漢: 'かん', 魏: 'ぎ', 呉: 'ご', 蜀: 'しょく', 晋: 'しん', 隋: 'ずい', 唐: 'とう', 宋: 'そう', 遼: 'りょう', 元: 'げん', 明: 'みん', 清: 'しん' };
+    s = s.replace(/(^|[^一-龥々])([殷周秦漢魏呉蜀晋隋唐宋遼元明清])(?=(の|は|が|を|に|と|で|も|へ|や|朝|代|軍|帝|王|、|。|$))/g, (m, pre, c) => pre + DYN[c]);
+    // よく読みまちがえる語
+    const WORDS = [['元首', 'げんしゅ'], ['元老院', 'げんろういん'], ['明治', 'めいじ'], ['清教徒', 'せいきょうと'], ['宋代', 'そうだい'], ['金印', 'きんいん'],
+      ['冊封', 'さくほう'], ['羈縻', 'きび'], ['藩部', 'はんぶ'], ['都護府', 'とごふ'], ['朝貢', 'ちょうこう'], ['匈奴', 'きょうど'], ['鮮卑', 'せんぴ'], ['柔然', 'じゅうぜん'],
+      ['突厥', 'とっけつ'], ['吐蕃', 'とばん'], ['渤海', 'ぼっかい'], ['靖康', 'せいこう'], ['澶淵', 'せんえん'], ['科挙', 'かきょ'], ['両税法', 'りょうぜいほう'], ['均田制', 'きんでんせい'],
+      ['府兵制', 'ふへいせい'], ['租調庸', 'そちょうよう'], ['一条鞭法', 'いちじょうべんぽう'], ['地丁銀', 'ちていぎん'], ['八旗', 'はっき'], ['緑営', 'りょくえい'], ['公行', 'こうこう'],
+      ['洋務運動', 'ようむうんどう'], ['変法', 'へんぽう'], ['義和団', 'ぎわだん'], ['辛亥', 'しんがい'], ['五・四', 'ごし'], ['盧溝橋', 'ろこうきょう'], ['満洲', 'まんしゅう'], ['廃兵院', 'はいへいいん'],
+      ['三部会', 'さんぶかい'], ['球戯場', 'きゅうぎじょう'], ['恐怖政治', 'きょうふせいじ'], ['総裁政府', 'そうさいせいふ'], ['統領政府', 'とうりょうせいふ'], ['大陸封鎖令', 'たいりくふうされい'],
+      ['宗教改革', 'しゅうきょうかいかく'], ['贖宥状', 'しょくゆうじょう'], ['カリフ', 'カリフ'], ['スルタン', 'スルタン'], ['ムガル', 'ムガル']];
+    WORDS.forEach(([w, r]) => { s = s.split(w).join(r); });
+    return s;
   },
-  speak(text, onend) {
+  // 文ごとに分ける（句点・感嘆符・疑問符のあと）
+  sentences(t) {
+    return String(t || '').split(/(?<=[。！？!?])\s*/).map(x => x.trim()).filter(x => x.replace(/[。、\s]/g, '').length);
+  },
+  // parts を順に読む。onPart(i) で今どの文かを知らせる
+  speakParts(parts, onend, onPart) {
     if (!this.ok) { if (onend) setTimeout(onend, 4000); return; }
     speechSynthesis.cancel();
     const tok = ++this.tok;
-    const u = new SpeechSynthesisUtterance(this.clean(text));
-    u.lang = 'ja-JP'; u.rate = this.rate;
-    const v = this.voice(); if (v) u.voice = v;
-    const done = () => { if (tok === this.tok) { this.tok++; if (onend) onend(); } };
-    u.onend = done; u.onerror = done;
-    speechSynthesis.speak(u);
+    const v = this.voice();
+    let i = 0;
+    const next = () => {
+      if (tok !== this.tok) return;
+      if (i >= parts.length) { this.tok++; if (onend) onend(); return; }
+      if (onPart) onPart(i);
+      const u = new SpeechSynthesisUtterance(this.clean(parts[i]));
+      u.lang = 'ja-JP'; u.rate = this.rate; u.pitch = 1;
+      if (v) u.voice = v;
+      i++;
+      // 文と文のあいだに少し間をおく（題のあとは長めに）
+      const gap = i === 1 && parts.length > 1 ? 380 : 220;
+      u.onend = () => setTimeout(next, gap);
+      u.onerror = e => { if (e && (e.error === 'interrupted' || e.error === 'canceled')) return; setTimeout(next, gap); };
+      speechSynthesis.speak(u);
+    };
+    next();
   },
+  speak(text, onend, onPart) { this.speakParts(this.sentences(text), onend, onPart); },
   speaking() { return this.ok && speechSynthesis.speaking; },
   stop() { this.tok++; if (this.ok) speechSynthesis.cancel(); },
-  setOn(v) { this.on = v; store.set('tts', v); if (!v) this.stop(); }
+  setOn(v) { this.on = v; store.set('tts', v); if (!v) this.stop(); },
+  setRate(r) { this.rate = r; store.set('ttsRate', r); },
+  setVoice(n) { this.voiceName = n; store.set('ttsVoice', n); }
 };
-if (SPEECH.ok) { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); }
+if (SPEECH.ok) { speechSynthesis.getVoices(); speechSynthesis.addEventListener && speechSynthesis.addEventListener('voiceschanged', () => speechSynthesis.getVoices()); }
 // 「🔊 読み上げ」ボタン（もう一度おすと止まる）
 function speakBtn(getText, label = '🔊 読み上げ') {
   const b = el(`<button type="button" class="chip speak">${label}</button>`);

@@ -312,6 +312,19 @@ registerTool('map', {
     }
     // 場面の読み上げ用の文
     const stepSpeech = s => `${yearLabel(s.year)}${s.date ? '、' + s.date : ''}。${s.title}。${s.text || ''}${s.why ? '。' + s.why : ''}`;
+    // 場面を文ごとに読み、読んでいる文をテロップで光らせる
+    const clearReading = () => $$('.hm-caption .reading').forEach(x => x.classList.toggle('reading', false));
+    function speakStep(s, onend) {
+      const sents = SPEECH.sentences(s.text || '');
+      const parts = [`${yearLabel(s.year)}${s.date ? '、' + s.date : ''}。${s.title}。`, ...sents];
+      const marks = ['.cap-title', ...sents.map((x, i) => `.cap-s[data-i="${i}"]`)];
+      if (s.why) { parts.push('つながり。' + s.why.replace(/^[^：]*：/, '')); marks.push('.cap-why'); }
+      SPEECH.speakParts(parts, () => { clearReading(); if (onend) onend(); }, i => {
+        clearReading();
+        const e = $('.hm-caption ' + marks[i]);
+        if (e) { e.classList.add('reading'); const box = e.closest('.cap-text'); if (box) box.scrollTop = Math.max(0, e.offsetTop - box.offsetTop - 8); }
+      });
+    }
     // 地図の下に重ねる「テロップ」（スクロールしなくても読める）
     function renderCaption() {
       const cap = map.caption;
@@ -324,7 +337,7 @@ registerTool('map', {
         <div class="cap-top"><span class="cap-story">${esc(story.title)}</span><span class="cap-n num">${si + 1} / ${n}</span></div>
         <div class="cap-when"><span class="num">${esc(yearLabel(s.year))}</span>${s.date ? ' ' + esc(s.date) : ''}<span>📍 ${esc(s.place || '')}</span></div>
         <div class="cap-title">${esc(s.title)}</div>
-        <div class="cap-text">${esc(s.text || '')}${s.why ? `<div class="cap-why">🔗 ${esc(s.why)}</div>` : ''}</div>
+        <div class="cap-text">${SPEECH.sentences(s.text || '').map((x, i) => `<span class="cap-s" data-i="${i}">${esc(x)}</span>`).join('')}${s.why ? `<div class="cap-why">🔗 ${esc(s.why)}</div>` : ''}</div>
         <div class="cap-ctl">
           <button type="button" data-a="prev" ${si === 0 ? 'disabled' : ''} aria-label="前の場面">◀</button>
           <button type="button" data-a="play" class="pl" aria-label="${playing ? '止める' : '自動で進む'}">${playing ? '❚❚' : '▶'}</button>
@@ -350,7 +363,7 @@ registerTool('map', {
       else if (a === 'size') { store.set('capSmall', !store.get('capSmall', false)); renderCaption(); }
       else if (a === 'tts') {
         SPEECH.setOn(!SPEECH.on);
-        if (SPEECH.on) { if (playing) schedule(); else SPEECH.speak(stepSpeech(story.steps[si])); }
+        if (SPEECH.on) { if (playing) schedule(); else speakStep(story.steps[si]); }
         else if (playing) schedule();
         renderSideNow();
       } else {
@@ -375,7 +388,7 @@ registerTool('map', {
       }
       syncHash(); renderSideNow();
       map.flyTo(s.lon, s.lat, s.span || 6, v);
-      if (playing) schedule(); else if (SPEECH.on) SPEECH.speak(stepSpeech(s));
+      if (playing) schedule(); else if (SPEECH.on) setTimeout(() => { if (story && story.steps[si] === s) speakStep(s); }, 60);
     }
     function nextOrEnd() { if (!story) return; if (si < story.steps.length - 1) goStep(si + 1); else { playing = false; renderSideNow(); } }
     function schedule() {
@@ -386,7 +399,8 @@ registerTool('map', {
         const txt = stepSpeech(s);
         // 声が出ない環境でも止まらないように、長めの予備のタイマーも置く
         stTimer = setTimeout(() => { if (story === S && playing) { SPEECH.stop(); nextOrEnd(); } }, 9000 + txt.length * 320);
-        SPEECH.speak(txt, () => { if (story === S && playing) { clearTimeout(stTimer); stTimer = setTimeout(nextOrEnd, 1200); } });
+        // テロップができてから読みはじめる（光らせる文の場所が必要なので）
+        setTimeout(() => { if (story === S && playing) speakStep(s, () => { if (story === S && playing) { clearTimeout(stTimer); stTimer = setTimeout(nextOrEnd, 1200); } }); }, 60);
         return;
       }
       SPEECH.stop();

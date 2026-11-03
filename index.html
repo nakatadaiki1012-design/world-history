@@ -355,6 +355,10 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .cap-when span:last-child { color: #e8dfcf; font-weight: 500; }
 .cap-title { font-family: var(--font-display); font-weight: 800; font-size: calc(19px * var(--ls, 1)); line-height: 1.35; }
 .cap-text { font-size: calc(14.5px * var(--ls, 1)); line-height: 1.6; max-height: 6.6em; overflow-y: auto; margin-top: 2px; }
+.cap-s { transition: background .2s, color .2s; border-radius: 3px; }
+.cap-s.reading, .cap-title.reading, .cap-why.reading { background: rgba(255, 215, 106, .22); color: #fff3cf; box-shadow: 0 0 0 2px rgba(255, 215, 106, .22); }
+.hm-set select { width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 2px 4px; font-size: 12.5px; }
+.hm-set input[type=range] { width: 100%; height: auto; }
 .cap-why { font-size: calc(12.5px * var(--ls, 1)); color: #cfe1f3; margin-top: 4px; }
 .hm-caption.small .cap-text, .hm-caption.small .cap-top { display: none; }
 .cap-ctl { display: flex; gap: 6px; margin: 7px 0 7px; }

@@ -32,6 +32,11 @@ function createHistMap(host, opts = {}) {
           <label><input type="checkbox" data-u="views"> 地域のボタン</label>
           ${opts.bar === false ? '' : '<label><input type="checkbox" data-u="eras"> 年のジャンプボタン</label>'}
         </div>
+        <div class="hm-set-g"><b>🔊 読み上げ</b>
+          <label style="display:grid;gap:2px">声<select class="tts-voice"></select></label>
+          <label style="display:grid;gap:2px">速さ <span class="tts-rv num"></span><input type="range" class="tts-rate" min="0.7" max="1.5" step="0.05"></label>
+          <button type="button" class="chip tts-test">▶ ためしに聞く</button>
+        </div>
         ${opts.bar === false ? '' : `<div class="hm-set-g"><b>▶ 再生の速さ</b>
           <div class="hm-speed"><button type="button" data-sp="1">×1</button><button type="button" data-sp="2">×2</button><button type="button" data-sp="4">×4</button><button type="button" data-sp="8">×8</button></div>
         </div>`}
@@ -222,7 +227,7 @@ function createHistMap(host, opts = {}) {
     $('.hm-yearbig', root).innerHTML = `${esc(yearLabel(y))}<small>${esc(eraName(y))}</small>`;
     if (opts.bar !== false) {
       $('.yr', root).textContent = yearLabel(y);
-      const r = $('input[type=range]', root);
+      const r = $('.hm-slider input', root);
       if (document.activeElement !== r) r.value = Math.round(yearToPos(y) * 10);
       $$('.hm-eras button', root).forEach(b => b.classList.toggle('on', +b.dataset.y === y));
     }
@@ -556,7 +561,7 @@ function createHistMap(host, opts = {}) {
 
   // --- 年のツマミ ---
   if (opts.bar !== false) {
-    const range = $('input[type=range]', root);
+    const range = $('.hm-slider input', root);
     range.addEventListener('input', () => setYear(posToYear(range.value / 10)));
     $$('.hm-steps button', root).forEach(b => b.addEventListener('click', () => setYear(addYear(st.year, +b.dataset.d))));
     // 目盛り（時代の色の帯と、年の数字）
@@ -612,6 +617,22 @@ function createHistMap(host, opts = {}) {
     const k = c.dataset.u; c.checked = !!ui[k];
     c.addEventListener('change', () => { ui[k] = c.checked; store.set('mapUI', ui); applyUI(); });
   });
+  // 読み上げの声と速さ
+  const vSel = $('.tts-voice', setBox), rIn = $('.tts-rate', setBox), rV = $('.tts-rv', setBox);
+  const fillVoices = () => {
+    const vs = SPEECH.voices();
+    vSel.innerHTML = vs.length ? vs.map(v => `<option value="${esc(v.name)}">${esc(v.name.replace(/Microsoft |Google |\(Japanese\)|Japanese|- 日本語/g, '').trim())}${/Natural|Neural|Online/i.test(v.name) ? '（自然）' : ''}</option>`).join('') : '<option>日本語の声がありません</option>';
+    const cur = SPEECH.voice(); if (cur) vSel.value = cur.name;
+    vSel.disabled = !vs.length;
+  };
+  fillVoices();
+  if (SPEECH.ok && speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', fillVoices);
+  vSel.addEventListener('change', () => SPEECH.setVoice(vSel.value));
+  rIn.value = SPEECH.rate; rV.textContent = '×' + SPEECH.rate.toFixed(2);
+  rIn.addEventListener('input', () => { SPEECH.setRate(+rIn.value); rV.textContent = '×' + (+rIn.value).toFixed(2); });
+  $('.tts-test', setBox).addEventListener('click', () => SPEECH.speak(`${yearLabel(st.year)}。${eraName(st.year)}です。この地図では、年のツマミを動かすと、国や王朝のようすが変わります。`));
+  if (!SPEECH.ok) $$('.tts-test, .tts-rate', setBox).forEach(x => { x.disabled = true; });
+
   st.speed = store.get('speed', 1);
   const markSpeed = () => $$('[data-sp]', setBox).forEach(b => b.classList.toggle('on', +b.dataset.sp === st.speed));
   $$('[data-sp]', setBox).forEach(b => b.addEventListener('click', () => { st.speed = +b.dataset.sp; store.set('speed', st.speed); markSpeed(); }));
