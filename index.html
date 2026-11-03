@@ -330,6 +330,8 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .st-bar { height: 4px; background: var(--chip); border-radius: 2px; margin-top: 6px; overflow: hidden; }
 .st-bar i { display: block; height: 100%; background: var(--accent); }
 .fig { margin: 8px 0; }
+.figs { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.figs .fig { margin: 0; }
 .fig img { display: block; width: 100%; max-height: 240px; object-fit: contain; background: var(--chip); border-radius: 8px; cursor: zoom-in; border: 1px solid var(--line); }
 .fig figcaption { font-size: 12.5px; margin-top: 3px; }
 .fig .credit { display: block; font-size: 11px; color: var(--muted); }
@@ -396,12 +398,17 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 <script src="js/data/polities-modern.js"></script>
 <script src="js/data/people.js"></script>
 <script src="js/data/events.js"></script>
+<script src="js/data/events-east.js"></script>
+<script src="js/data/events-south.js"></script>
+<script src="js/data/events-europe.js"></script>
 <script src="js/data/causes.js"></script>
 <script src="js/data/lessons-sogo.js"></script>
 <script src="js/data/lessons-tankyu.js"></script>
 <script src="js/data/portraits.js"></script>
+<script src="js/data/portraits-more.js"></script>
 <script src="js/data/stories.js"></script>
 <script src="js/data/images.js"></script>
+<script src="js/data/images-more.js"></script>
 <script src="js/data/shapes-precise.js"></script>
 <script src="js/geo.js"></script>
 <script src="js/core.js"></script>

@@ -38,7 +38,7 @@ const POLITIES = (window.POLITIES || []).filter(p => p && p.id && p.name);
 const POLITY = Object.fromEntries(POLITIES.map(p => [p.id, p]));
 const PEOPLE = (window.PEOPLE || []).filter(p => p && p.id && p.name).sort((a, b) => a.born - b.born);
 const PERSON = Object.fromEntries(PEOPLE.map(p => [p.id, p]));
-const EVENTS = (window.EVENTS || []).filter(e => e && e.title).sort((a, b) => a.year - b.year);
+const EVENTS = (() => { const seen = new Set(); return (window.EVENTS || []).filter(e => e && e.title && !seen.has(e.title) && seen.add(e.title)).sort((a, b) => a.year - b.year); })();
 const LESSONS = (window.LESSONS || []).filter(l => l && l.id);
 const PORTRAITS = window.PORTRAITS || {};
 const STORIES = (window.STORIES || []).filter(s => s && s.id && s.steps && s.steps.length);
