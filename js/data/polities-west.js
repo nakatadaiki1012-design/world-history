@@ -2171,12 +2171,12 @@
   });
   P.push({
     id: 'france-19', name: 'フランス', full: 'フランス（復古王政〜第三共和政）', region: 'europe',
-    start: 1815, end: 1914, capital: { name: 'パリ', lon: 2.35, lat: 48.86 },
+    start: 1815, end: 1918, capital: { name: 'パリ', lon: 2.35, lat: 48.86 },
     color: '#2e86c1', rank: 1,
     shapes: [
       { from: 1815, to: 1859, rings: [J(FR_E_1700, FR_SW), CORS] },
       { from: 1860, to: 1870, rings: [J(FR_E_1860, FR_SW), CORS] },
-      { from: 1871, to: 1914, rings: [J(FR_E_1871, FR_SW), CORS] }],
+      { from: 1871, to: 1918, rings: [J(FR_E_1871, FR_SW), CORS] }],
     label: [2.5, 47.0],
     text: 'ナポレオンの没落後、ブルボン家の復古王政となったが、七月革命・二月革命をへて第二共和政、ナポレオン3世の第二帝政となった。プロイセン=フランス戦争に敗れてアルザス・ロレーヌを失い、パリ=コミューンののち第三共和政が成立した。',
     keys: ['七月革命', '二月革命', 'ナポレオン3世', 'パリ=コミューン', '第三共和政'], tags: ['tankyu', 'sogo']
