@@ -110,6 +110,10 @@ function createHistMap(host, opts = {}) {
     const w = Math.max(200, Math.round(r.width)), h = Math.max(160, Math.round(r.height));
     if (w === st.w && h === st.h) return;
     st.w = w; st.h = h;
+    // 文字の大きさを地図の大きさに合わせる（スマホは小さめ、プロジェクターや大きな画面では大きく）
+    st.ls = clamp(Math.min(w / 1000, h / 620), 0.82, 1.7);
+    root.style.setProperty('--ls', st.ls.toFixed(3));
+    mcache.clear();
     svg.attr('viewBox', `0 0 ${w} ${h}`);
     zoom.extent([[0, 0], [w, h]]).translateExtent([[-w * 0.6, -h * 0.6], [w * 1.6, h * 1.6]]);
     buildBase();
@@ -317,8 +321,10 @@ function createHistMap(host, opts = {}) {
       const isSel = sel && sel.type === 'polity' && sel.id === p.id;
       if (!isSel && wpx < 22) return null;
       if (st.view === 'world' && t.k < 1.6 && rank >= 3 && !isSel) return null;
+      const S = st.ls || 1;
       let fs = rank === 1 ? 17 : rank === 2 ? 14 : 12;
       if (wpx < 80) fs = Math.max(11, fs - 3);
+      fs *= S;
       const w = textW(p.name, fs, true), h = fs * 1.15;
       if (!isSel && w > wpx * 1.6 && rank > 1) return null;   // 小さな国に長い名前は出さない
       const dy = Math.min(hpx / 3, fs * 1.3);
@@ -330,21 +336,21 @@ function createHistMap(host, opts = {}) {
     const jobs = [];
     polCands.forEach(c => jobs.push({ pri: c.pri, sub: -c.area, run: () => { const r = tryPlace(c.cands); if (r) labs.push({ p: c.p, x: r.x, y: r.y, fs: c.fs }); } }));
     ppl.forEach(x => {
-      const s = isSelP(x.p.id), w = textW(x.p.name, 12, false), h = 14;
+      const S = st.ls || 1, s = isSelP(x.p.id), w = textW(x.p.name, 12 * S, false), h = 14 * S;
       jobs.push({ pri: s ? 0 : PORTRAITS[x.p.id] ? 2 : 4, sub: 0, run: () => { x.lab = tryPlace(side(x.sx, x.sy, x.r + 3, w, h, s)); } });
     });
     caps.forEach(c => {
-      const w = textW(c.name, 11, false), h = 13;
+      const S = st.ls || 1, w = textW(c.name, 11 * S, false), h = 13 * S;
       if (!(t.k >= 1.4 || st.view !== 'world' || c.rank === 1)) return;
       jobs.push({ pri: 5, sub: c.rank, run: () => { c.lab = tryPlace(side(c.x, c.y, 6, w, h, false)); } });
     });
     evs.forEach(x => {
       const s = sel && sel.type === 'event' && sel.id === x.i;
       if (!s && x.age > x.win / 3) return;
-      const w = textW(x.e.title, 11, false), h = 13;
+      const S = st.ls || 1, w = textW(x.e.title, 11 * S, false), h = 13 * S;
       jobs.push({ pri: s ? 0 : 7, sub: x.age, run: () => { x.lab = tryPlace(side(x.sx, x.sy, 9, w, h, s)); } });
     });
-    storyLabels.forEach(m => jobs.push({ pri: m.main ? 0 : 1, sub: 0, run: () => { m.lab = tryPlace(side(m.x, m.y, m.main ? 13 : 7, textW(m.name, m.main ? 14 : 12, false), m.main ? 17 : 14, m.main)); } }));
+    storyLabels.forEach(m => jobs.push({ pri: m.main ? 0 : 1, sub: 0, run: () => { m.lab = tryPlace(side(m.x, m.y, m.main ? 13 : 7, textW(m.name, (m.main ? 14 : 12) * (st.ls || 1), false), (m.main ? 17 : 14) * (st.ls || 1), m.main)); } }));
     jobs.sort((a, b) => a.pri - b.pri || a.sub - b.sub).forEach(j => j.run());
     gStory.selectAll('text.st-lab').data(storyLabels.filter(m => m.lab)).join('text').attr('class', d => 'st-lab' + (d.main ? ' main' : ''))
       .attr('dominant-baseline', 'central').attr('x', d => d.x + d.lab.dx).attr('y', d => d.y + d.lab.dy).attr('text-anchor', d => d.lab.a).text(d => d.name);
