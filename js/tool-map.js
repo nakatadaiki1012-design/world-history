@@ -311,7 +311,15 @@ registerTool('map', {
       const s = story.steps[si];
       map.setYear(s.year);
       map.setStory(s);
-      map.flyTo(s.lon, s.lat, s.span || 6, first ? (story.view || REGION_VIEW[story.region]) : null);
+      // 場面が今の地域の外なら、その場所が入る地域に切りかえる（遠くの大陸へとぶとき）
+      const inBox = (v, lon, lat) => { const b = GEO.VIEWS[v].bbox; return lon >= b[0] && lon <= b[2] && lat >= b[1] && lat <= b[3]; };
+      let v = first ? (story.view || REGION_VIEW[story.region]) : null;
+      const cur = v || map.view;
+      if (!inBox(cur, s.lon, s.lat)) {
+        const cands = Object.entries(GEO.VIEWS).filter(([k, x]) => !x.parent && k !== 'world' && inBox(k, s.lon, s.lat)).sort((a, b) => a[1].span - b[1].span);
+        v = (s.span || 6) > 25 || !cands.length ? 'world' : cands[0][0];
+      }
+      map.flyTo(s.lon, s.lat, s.span || 6, v);
       syncHash(); renderSideNow();
       if (playing) schedule();
     }
