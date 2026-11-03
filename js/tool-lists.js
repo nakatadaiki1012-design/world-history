@@ -4,35 +4,40 @@
 function listFilters(box, key, opts, onChange) {
   const st = Object.assign({ region: '', era: '', course: '', kind: '', sort: 'year', q: '', skind: '', theme: '' }, store.get(key, {}));
   const save = () => { store.set(key, st); onChange(st); };
-  const row = (label, items, field) => {
-    const r = el(`<div class="lf-row"><b>${label}</b></div>`);
-    items.forEach(([v, n, c]) => {
-      const b = el(`<button type="button" class="chip" aria-pressed="${st[field] === v}">${c ? `<span class="sw" style="background:${c}"></span>` : ''}${n}</button>`);
-      b.addEventListener('click', () => {
-        st[field] = st[field] === v && field !== 'sort' ? '' : v;
-        if (field === 'skind') { if (st.skind !== 'theme') st.theme = ''; store.set(key, st); box.innerHTML = ''; listFilters(box, key, opts, onChange); return; }
-        $$('button', r).forEach((x, i) => x.setAttribute('aria-pressed', String(items[i][0] === st[field])));
-        save();
-      });
-      r.appendChild(b);
-    });
-    box.appendChild(r);
-  };
+  box.classList.add('lf2');
+  box.innerHTML = '';
+  // 物語の種類だけはよく使うので、タブのように上に並べる
   if (opts.storyKinds) {
-    row('種類', [['', 'すべて'], ['event', '🗺 できごと'], ['person', '👤 人物'], ['theme', '🧭 テーマ']], 'skind');
-    if (st.skind === 'theme' || st.theme) row('テーマ', [['', 'すべて'], ...Object.entries(THEME_NAME).filter(([k]) => STORIES.some(s => s.theme === k)).map(([k, n]) => [k, n])], 'theme');
+    const tabs = el('<div class="lf-tabs"></div>');
+    [['', 'すべて'], ['event', '🗺 できごと'], ['person', '👤 人物'], ['theme', '🧭 テーマ']].forEach(([v, n]) => {
+      const b = el(`<button type="button" aria-pressed="${st.skind === v}">${n}</button>`);
+      b.addEventListener('click', () => { st.skind = v; if (v !== 'theme') st.theme = ''; store.set(key, st); listFilters(box, key, opts, onChange); });
+      tabs.appendChild(b);
+    });
+    box.appendChild(tabs);
   }
+  // のこりの条件は、1行のセレクト（スマホでも場所をとらない）
+  const bar = el('<div class="lf-bar"></div>');
   if (opts.search) {
-    const s = el(`<div class="lf-row"><input type="search" placeholder="ことばでさがす（例：茶、ペスト、印刷）"></div>`);
-    const inp = $('input', s); inp.value = st.q;
+    const inp = el('<input type="search" class="lf-q" placeholder="🔍 さがす（例：茶、ペスト）">');
+    inp.value = st.q;
     inp.addEventListener('input', () => { st.q = inp.value.trim(); save(); });
-    box.appendChild(s);
+    bar.appendChild(inp);
   }
-  row('地域', [['', 'すべて'], ...REGIONS.map(r => [r.id, r.name, r.color])], 'region');
-  row('時代', [['', 'すべて'], ...ERA_BINS.map(b => [b[2], b[2] + (b[0] <= -9999 ? '（〜500）' : b[1] >= 9999 ? `（${b[0]}〜）` : `（${b[0]}〜${b[1]}）`)])], 'era');
-  row('科目', [['', 'すべて'], ['sogo', '歴史総合'], ['tankyu', '世界史探究']], 'course');
-  if (opts.kinds) row('種類', [['', 'すべて'], ...Object.entries(KIND).map(([k, n]) => [k, n, KIND_COLOR[k]])], 'kind');
-  row('並べかえ', [['year', '年代の古い順'], ['year-desc', '新しい順'], ['region', '地域ごと']], 'sort');
+  const sel = (field, items, label) => {
+    const s = el(`<select aria-label="${label}">${items.map(([v, n]) => `<option value="${v}">${n}</option>`).join('')}</select>`);
+    s.value = st[field] || '';
+    s.classList.toggle('on', !!st[field] && field !== 'sort');
+    s.addEventListener('change', () => { st[field] = s.value; s.classList.toggle('on', !!s.value && field !== 'sort'); save(); });
+    bar.appendChild(s);
+  };
+  if (opts.storyKinds && st.skind === 'theme') sel('theme', [['', 'テーマ：すべて'], ...Object.entries(THEME_NAME).filter(([k]) => STORIES.some(s => s.theme === k))], 'テーマ');
+  sel('region', [['', '地域：すべて'], ...REGIONS.map(r => [r.id, r.name])], '地域');
+  sel('era', [['', '時代：すべて'], ...ERA_BINS.map(b => [b[2], b[2]])], '時代');
+  if (opts.kinds) sel('kind', [['', '種類：すべて'], ...Object.entries(KIND)], '種類');
+  sel('course', [['', '科目：すべて'], ['sogo', '歴史総合'], ['tankyu', '世界史探究']], '科目');
+  sel('sort', [['year', '古い順'], ['year-desc', '新しい順'], ['region', '地域ごと']], '並べかえ');
+  box.appendChild(bar);
   onChange(st);
   return st;
 }
@@ -74,7 +79,7 @@ registerTool('stories', {
 registerTool('events', {
   name: '出来事',
   render(main) {
-    main.appendChild(el(`<div class="course-head"><h2>出来事の一覧</h2><div class="muted" style="font-size:13.5px">おすと、その年の地図が開きます。💡は「ここがおもしろい」つき。</div></div>`));
+    main.appendChild(el(`<div class="course-head"><h2>出来事の一覧</h2><div class="muted" style="font-size:13px">おすと地図が開きます（💡＝ここがおもしろい）</div></div>`));
     const f = el('<div class="lf" style="max-width:1100px;margin:0 auto 10px"></div>');
     const cnt = el('<div class="muted" style="max-width:1100px;margin:0 auto 6px;font-size:13px"></div>');
     const list = el('<div class="evlist" style="max-width:1100px;margin:0 auto"></div>');
