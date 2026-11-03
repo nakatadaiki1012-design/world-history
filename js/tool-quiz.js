@@ -16,9 +16,26 @@ function quizMaker(course) {
   const termPool = () => (typeof GLOSSARY === 'undefined' ? [] : GLOSSARY).filter(g => g.def && g.def.length > 20 && (!course || !(g.course || []).length || g.course.includes(course)));
   const termPick = () => { const P = termPool(); if (!P.length) return null; const w = P.map(g => (g.rank || 1) * (g.rank || 1)); let r = Math.random() * w.reduce((a, b) => a + b, 0); for (let i = 0; i < P.length; i++) { r -= w[i]; if (r <= 0) return P[i]; } return P[0]; };
   // まちがいの選択肢：同じ分類・同じ地域・近い時代の語から（見分けがいのあるものに）
-  const termOthers = (g, n) => { const P = termPool().filter(x => x.term !== g.term && !g.def.includes(x.term) && !x.def.includes(g.term));
-    const near = P.filter(x => x.cat === g.cat && (x.region === g.region || (x.year != null && g.year != null && Math.abs(x.year - g.year) < 400)));
-    return shuffle(near.length >= n ? near : P).slice(0, n); };
+  // 説明文がよく似ている語は、同じものの別名（例：普墺戦争／プロイセン=オーストリア戦争）なので選択肢にしない
+  const bigrC = new WeakMap();
+  const bigr = g => { let o = bigrC.get(g); if (o) return o; o = new Set(); const t = g.def; for (let i = 0; i < t.length - 1; i++) o.add(t.slice(i, i + 2)); bigrC.set(g, o); return o; };
+  const sameThing = (a, b) => { if (a.year != null && b.year != null && a.year === b.year && a.cat === b.cat && a.region === b.region) return true; const A = bigr(a), B = bigr(b); let k = 0; A.forEach(x => { if (B.has(x)) k++; }); return k / Math.min(A.size, B.size) > 0.45; };
+  const termOthers = (g, n) => {
+    const P = termPool().filter(x => !sameThing(x, g) && x.term !== g.term && !g.def.includes(x.term) && !x.def.includes(g.term) && !(x.term.includes(g.term) || g.term.includes(x.term)) && x.yomi !== g.yomi);
+    const U = g.year != null ? (g.year < -500 ? 300 : g.year < 600 ? 150 : g.year < 1500 ? 80 : g.year < 1800 ? 40 : 15) : 0;
+    const sc = x => (x.cat === g.cat ? 4 : -3) + (x.region === g.region ? 2 : 0) + (g.year != null && x.year != null ? (Math.abs(x.year - g.year) <= U ? 3 : Math.abs(x.year - g.year) <= U * 3 ? 2 : Math.abs(x.year - g.year) <= U * 8 ? 0 : -2) : 0) + ((x.related || []).includes(g.term) || (g.related || []).includes(x.term) ? 1 : 0) + Math.random() * 1.5;
+    // 選んだ3つどうしも、同じものの別名にならないように
+    const out = [];
+    for (const o of P.map(x => ({ x, v: sc(x) })).sort((a, b) => b.v - a.v)) { if (out.length >= n) break; if (!out.some(y => sameThing(y, o.x) || tooSame(y.term, o.x.term))) out.push(o.x); }
+    return out;
+  };
+  // まぎらわしい選択肢をえらぶ：点数（近さ）の高いものから、少しだけばらつかせて n 個
+  const closest = (list, score, n) => list.map(x => ({ x, v: score(x) + Math.random() * 1.2 })).filter(o => o.v > -50).sort((a, b) => b.v - a.v).slice(0, n).map(o => o.x);
+  const yearNear = (a, b, unit) => { const d = Math.abs(a - b); return d <= unit ? 3 : d <= unit * 2.5 ? 2 : d <= unit * 6 ? 1 : d <= unit * 15 ? 0 : -2; };
+  // 時代ごとの「近い」の目安（古い時代ほど、ゆるく）
+  const unitAt = y => y < -500 ? 300 : y < 600 ? 150 : y < 1500 ? 80 : y < 1800 ? 40 : 15;
+  // 名前が似すぎ（同じ国の別の書き方など）は外す
+  const tooSame = (a, b) => a === b || (a.length >= 2 && b.length >= 2 && (a.includes(b) || b.includes(a)));
   // 歴史総合は 18 世紀以降が中心
   const inCourse = x => !course || (x.tags || []).includes(course) || (course === 'sogo' && (x.start || x.year || x.born || 0) >= 1700);
   const pols = POLITIES.filter(p => (p.rank || 2) <= 2 && inCourse(p));
@@ -30,7 +47,10 @@ function quizMaker(course) {
       if (!p) return null;
       const s = pick(p.shapes);
       const y = fixYear(Math.round((Math.max(s.from, p.start) + Math.min(s.to, p.end, YEAR_MAX)) / 2));
-      const others = shuffle(POLITIES.filter(q => q.id !== p.id && q.name !== p.name && y >= q.start && y <= q.end && (q.rank || 2) <= 2)).slice(0, 3);
+      // 同じ年にあった国のうち、同じ地域・近くの国を優先（地図を見ないと迷うように）
+      const pc = p.capital || (p.capitals || [])[0];
+      const others = closest(POLITIES.filter(q => q.id !== p.id && !tooSame(q.name, p.name) && y >= q.start && y <= q.end && (q.rank || 2) <= 2),
+        q => (q.region === p.region ? 4 : 0) + (() => { const qc = q.capital || (q.capitals || [])[0]; return pc && qc ? Math.max(0, 3 - d3.geoDistance([pc.lon, pc.lat], [qc.lon, qc.lat]) * 6) : 0; })(), 3);
       if (others.length < 3) return null;
       const c = shuffle([p, ...others]);
       return { q: `${yearLabel(y)}ごろ、地図で色をつけた国・王朝はどれ？`, c: c.map(x => x.name), a: c.indexOf(p), exp: `${p.name}（${span(p.start, p.end)}）。${p.text || ''}`, map: { year: y, id: p.id, view: REGION_VIEW[p.region] || 'world' } };
@@ -39,7 +59,8 @@ function quizMaker(course) {
       const ws = pols.filter(p => p.capital || (p.capitals && p.capitals.length));
       const p = pick(ws); if (!p) return null;
       const cap = p.capital || pick(p.capitals);
-      const others = shuffle(ws.filter(q => q.region === p.region && q.name !== p.name && !(q.capitals || [q.capital]).some(c => c && c.name === cap.name))).slice(0, 3);
+      const others = closest(ws.filter(q => !tooSame(q.name, p.name) && !(q.capitals || [q.capital]).some(c => c && c.name === cap.name)),
+        q => (q.region === p.region ? 4 : -60) + yearNear(q.start, p.start, unitAt(p.start) * 2), 3);
       if (others.length < 3) return null;
       const c = shuffle([p, ...others]);
       return { q: `${cap.name}に都をおいた国・王朝はどれ？`, c: c.map(x => x.name), a: c.indexOf(p), exp: `${p.name}（${span(p.start, p.end)}）の都は${(p.capitals || [p.capital]).map(c => c.name).join('・')}。${p.text || ''}` };
@@ -50,15 +71,22 @@ function quizMaker(course) {
       const regs = []; const three = [];
       alive.forEach(p => { if (three.length < 3 && !regs.includes(p.region)) { regs.push(p.region); three.push(p); } });
       if (three.length < 3) return null;
-      const not = pick(pols.filter(p => (p.end < y - 100 || p.start > y + 100) && !three.some(t => t.name === p.name)));
+      // ちがう1つも、少しだけ時代がずれた国にする（大昔の国だとすぐわかってしまう）
+      const gap = unitAt(y);
+      const not = pick(pols.filter(p => ((p.end < y - gap * 0.3 && p.end > y - gap * 4) || (p.start > y + gap * 0.3 && p.start < y + gap * 4)) && regs.includes(p.region) && !three.some(t => tooSame(t.name, p.name)) && !POLITIES.some(q => q.name === p.name && y >= q.start && y <= q.end)));
       if (!not) return null;
       const c = shuffle([...three, not]);
       return { q: `${yearLabel(y)}に、まだ（もう）存在して<b>いなかった</b>国・王朝はどれ？`, c: c.map(x => x.name), a: c.indexOf(not), exp: `${not.name}は${span(not.start, not.end)}。ほかの3つは${yearLabel(y)}に存在した（${three.map(t => `${t.name} ${span(t.start, t.end)}`).join('、')}）。` };
     },
     order() {
-      const pool = shuffle(evs);
-      const four = [];
-      for (const e of pool) { if (four.length >= 4) break; if (four.every(f => Math.abs(f.year - e.year) >= 8 && f.title !== e.title)) four.push(e); }
+      // 1つえらび、その前後の近い時代・同じ地域（なければ近い地域）から残りをえらぶ
+      const a0 = pick(evs); if (!a0) return null;
+      const U = unitAt(a0.year), minGap = Math.max(2, Math.round(U / 6));
+      const near = shuffle(evs.filter(e => e !== a0 && Math.abs(e.year - a0.year) <= U * 2.5));
+      near.sort((a, b) => (b.region === a0.region) - (a.region === a0.region));
+      const four = [a0];
+      for (const e of near) { if (four.length >= 4) break; if (four.every(f => Math.abs(f.year - e.year) >= minGap && f.title !== e.title)) four.push(e); }
+      shuffle(four);
       if (four.length < 4) return null;
       const newest = Math.random() < 0.5;
       const ans = four.slice().sort((a, b) => newest ? b.year - a.year : a.year - b.year)[0];
@@ -66,7 +94,10 @@ function quizMaker(course) {
     },
     who() {
       const p = pick(ppl.filter(p => p.text && p.text.length > 20)); if (!p) return null;
-      const others = shuffle(ppl.filter(q => q.id !== p.id && Math.abs(q.born - p.born) < 600)).slice(0, 3);
+      const roleWords = r => (String(r || '').match(/皇帝|王|天子|ハン|スルタン|カリフ|大統領|首相|将軍|軍人|思想家|哲学者|宗教|僧|教皇|画家|作家|詩人|科学者|学者|探検|航海|革命|政治家|商人|女王|改革/g) || []);
+      const rw = roleWords(p.role);
+      const others = closest(ppl.filter(q => q.id !== p.id && !tooSame(q.name, p.name)),
+        q => (q.region === p.region ? 3 : 0) + yearNear(q.born, p.born, unitAt(p.born)) + (roleWords(q.role).some(w => rw.includes(w)) ? 2 : 0), 3);
       if (others.length < 3) return null;
       let text = p.text;
       [p.name, ...(p.name.split('=').length > 1 ? p.name.split('=') : [])].forEach(n => { if (n.length >= 2) text = text.split(n).join('この人物'); });
@@ -93,7 +124,9 @@ function quizMaker(course) {
       const g = pick(pool); if (!g) return null;
       const bins = ERA_BINS.map(b => b[2]);
       const right = eraOf(g.year);
-      const c = shuffle([right, ...shuffle(bins.filter(b => b !== right)).slice(0, 3)]);
+      // となりあう時代から4つ（「古代」と「現代」のような、すぐわかる組み合わせにしない）
+      const ri = bins.indexOf(right), st0 = Math.max(0, Math.min(bins.length - 4, ri - Math.floor(Math.random() * 4)));
+      const c = bins.slice(st0, st0 + 4);
       return { q: `「${esc(g.term)}」がいちばん関係する時代はどれ？`, c, a: c.indexOf(right), exp: `${g.term}（${yearLabel(g.year)}）：${g.def}`, term: g.term };
     },
     lesson() {
