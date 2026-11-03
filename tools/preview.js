@@ -12,6 +12,7 @@ for (const f of ['vendor/d3.min.js', 'vendor/topojson-client.min.js', 'vendor/wo
 const [year, view = 'world', out = '/tmp/preview.png', ...files] = process.argv.slice(2);
 const dataFiles = files.length ? files : fs.readdirSync(path.join(root, 'js/data')).filter(f => /^polities.*\.js$/.test(f)).map(f => 'js/data/' + f);
 for (const f of dataFiles) vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'), ctx, { filename: f });
+if (fs.existsSync(path.join(root, 'js/data/shapes-precise.js'))) vm.runInContext(fs.readFileSync(path.join(root, 'js/data/shapes-precise.js'), 'utf8'), ctx);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/geo.js'), 'utf8'), ctx, { filename: 'js/geo.js' });
 const W = 1200, H = 760;
 const svg = vm.runInContext(`GEO.previewSVG(${+year}, ${JSON.stringify(view)}, ${W}, ${H})`, ctx);

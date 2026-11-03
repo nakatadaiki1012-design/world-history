@@ -61,6 +61,16 @@
   Object.values(VIEWS).forEach(v => { const [w, s, e, n] = v.bbox; v.center = [(w + e) / 2, (s + n) / 2]; v.span = e - w; });
 
 
+  // くわしい形（tools/geo で作ったもの）があれば、手で描いた形のかわりに使う
+  (function applyPrecise() {
+    const P = W.PRECISE; if (!P) return;
+    (W.POLITIES || []).forEach(p => {
+      const m = P[p.id]; if (!m) return;
+      (p.shapes || []).forEach(s => { const r = m[String(s.from)]; if (r && r.length) { s.rings = r; delete s.iso; } });
+      (p.spheres || []).forEach((s, i) => { const r = m['sphere:' + i]; if (r && r.length) { s.rings = r; delete s.iso; } });
+    });
+  })();
+
   // 輪の向きを直す（面積が半球より大きければ逆向き）
   const fixed = new WeakMap();
   function fixRings(rings) {
