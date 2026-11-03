@@ -628,7 +628,7 @@ function createHistMap(host, opts = {}) {
     ps2.exit().remove();
     const pe2 = ps2.enter().append('g').attr('class', 'hm-plc')
       .on('click', (ev, d) => { ev.stopPropagation(); select({ type: 'place', id: d.pl.id }); })
-      .on('mousemove', (ev, d) => showTip(ev, `<b>${esc(d.name)}</b>${d.pl.modern && d.pl.modern !== d.name ? `（今の${esc(d.pl.modern)}）` : ''}<br><span style="font-size:12px">${esc(d.pl.text || '')}</span>`))
+      .on('mousemove', (ev, d) => showTip(ev, `<b>${esc(d.name)}</b>${(() => { const m = d.pl.modern; if (!m || m === d.name) return ''; const r = m.startsWith(d.name) ? m.slice(d.name.length).replace(/^（(.*)）$/, '$1') : m; return r ? `（今の${esc(r)}）` : ''; })()}<br><span style="font-size:12px">${esc(d.pl.text || '')}</span>`))
       .on('mouseleave', hideTip);
     pe2.append('path').attr('d', 'M0,-4.5L4.5,0L0,4.5L-4.5,0Z');
     pe2.append('text').attr('dominant-baseline', 'central');
@@ -723,6 +723,9 @@ function createHistMap(host, opts = {}) {
     tip.style.top = Math.max(4, y - tip.offsetHeight - 10) + 'px';
   }
   function hideTip() { tip.hidden = true; }
+  // スマホでは指が「はなれた」ことがわからないので、どこかをタップしたら一度消す（地名をタップしたときは、そのあとで出し直す）
+  const onDown = () => hideTip();
+  document.addEventListener('pointerdown', onDown, true);
   svg.on('click', () => { const sb = $('.hm-set', root); if (sb && !sb.hidden) { sb.hidden = true; $('.gear', root).setAttribute('aria-expanded', 'false'); return; } if (st.sel) select(null); });
 
   // --- 物語：地点・進路・川などを描く（画面の座標で。拡大しても線の太さは同じ） ---
@@ -974,6 +977,6 @@ function createHistMap(host, opts = {}) {
     },
     people: () => shownPeople.filter(x => !x.ghost),
     events: () => shownEvents,
-    destroy() { stop(); ro.disconnect(); window.removeEventListener('lateready', onLate); root.remove(); }
+    destroy() { stop(); ro.disconnect(); document.removeEventListener('pointerdown', onDown, true); window.removeEventListener('lateready', onLate); root.remove(); }
   };
 }
