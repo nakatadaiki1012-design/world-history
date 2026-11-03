@@ -108,18 +108,24 @@
   }
 
   // その年に存在する国・王朝の形（GeoJSON Feature）
+  const featCache = new WeakMap();
   function shapeAt(p, year) {
     if (year < p.start || year > p.end || !p.shapes) return null;
     const s = p.shapes.find(s => year >= s.from && year <= s.to) || null;
     if (!s) return null;
+    // 同じ形には、いつも同じ Feature を返す（面積や画面上の形を覚えておけるように）
+    if (featCache.has(s)) return featCache.get(s);
     let geometry;
     if (s.iso) geometry = isoGeometry(s.iso);
     else geometry = { type: 'MultiPolygon', coordinates: fixRings(s.rings).map(r => [r]) };
-    return { type: 'Feature', id: p.id, properties: { p, s }, geometry };
+    const f = { type: 'Feature', id: p.id, properties: { p, s }, geometry };
+    f.area = d3.geoArea(f);
+    featCache.set(s, f);
+    return f;
   }
   function politiesAt(year) {
     return (W.POLITIES || []).map(p => shapeAt(p, year)).filter(Boolean)
-      .sort((a, b) => (b.properties.p.rank || 2) - (a.properties.p.rank || 2) || d3.geoArea(b) - d3.geoArea(a));
+      .sort((a, b) => (b.properties.p.rank || 2) - (a.properties.p.rank || 2) || b.area - a.area);
   }
   // その年の勢力圏（斜線で表示）
   function spheresAt(year) {
@@ -127,7 +133,7 @@
     (W.POLITIES || []).forEach(p => (p.spheres || []).forEach((s, i) => {
       if (year < s.from || year > s.to) return;
       const geometry = s.iso ? isoGeometry(s.iso) : (s.rings && s.rings.length ? { type: 'MultiPolygon', coordinates: fixRings(s.rings).map(r => [r]) } : null);
-      if (geometry) out.push({ type: 'Feature', id: p.id + '~' + i, properties: { p, s }, geometry });
+      if (geometry) { if (!s._f) s._f = { type: 'Feature', id: p.id + '~' + i, properties: { p, s }, geometry }; out.push(s._f); }
     }));
     return out;
   }

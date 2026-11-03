@@ -71,6 +71,7 @@ function createHistMap(host, opts = {}) {
   const gModern = gZoom.append('g');
   const gEdge = gZoom.append('g');
   const gRel = gZoom.append('g').attr('class', 'hm-relief');   // 陰影起伏（国の色の上に乗算でかさねる）
+  const gMask = gZoom.append('g');   // 海のふた
   const gWater = gZoom.append('g');  // 川と湖
   const gOver = svg.append('g');   // 名前・点（拡大しても大きさが変わらない）
   const gTlab = gOver.append('g');   // 地形・町の名前（いちばん下）
@@ -110,11 +111,11 @@ function createHistMap(host, opts = {}) {
     // 都市の大きさまで拡大したら、国の色をうすくして地形の線を見やすく
     gPol.style('opacity', st.k > 25 ? 0.22 : st.k > 12 ? 0.6 : null); gEdge.style('opacity', st.k > 25 ? 0.3 : null);
     gZoom.attr('transform', ev.transform);
-    updateTerrain();
-    placeOverlay();
-    drawInset();
+    // 名前や点の置きなおしは、1コマに1回だけ（ホイールやピンチで何回よばれても）
+    if (!zoomRaf) zoomRaf = requestAnimationFrame(() => { zoomRaf = 0; updateTerrain(); placeOverlay(); drawInset(); });
   });
-  zoom.on('end.relief', () => scheduleRelief());
+  let zoomRaf = 0;
+  zoom.on('end.relief', () => { updateDetail(); scheduleRelief(); });
   svg.call(zoom).on('dblclick.zoom', null);
   $$('.hm-tools button[data-z]', root).forEach(b => b.addEventListener('click', () => {
     const z = b.dataset.z;
@@ -138,25 +139,60 @@ function createHistMap(host, opts = {}) {
     draw();
   }
 
+  // 画面上の形（SVG の d）を覚えておく：年を変えても、同じ形は計算しなおさない
+  let pathCache = new WeakMap(), boundsCache = new WeakMap();
+  const pathOf = f => { let d = pathCache.get(f); if (d === undefined) { d = path(f) || ''; pathCache.set(f, d); } return d; };
+  const boundsOf = f => { let b = boundsCache.get(f); if (!b) { b = path.bounds(f); boundsCache.set(f, b); } return b; };
+  // 画面に合った細かさの形を作る：1ピクセルより近い点はとばす（遠くから見るときは軽く、拡大したら細かく）
+  let detailK = 1;
+  function makePath(k) {
+    const tol = 0.7 / k;
+    return d3.geoPath({ stream: out => pr.stream({
+      _x: NaN, _y: NaN, _n: 0,
+      point(x, y) { if (this._n === 0 || Math.abs(x - this._x) + Math.abs(y - this._y) >= tol) { this._x = x; this._y = y; out.point(x, y); } this._n++; },
+      lineStart() { this._n = 0; out.lineStart(); }, lineEnd() { out.lineEnd(); },
+      polygonStart() { out.polygonStart(); }, polygonEnd() { out.polygonEnd(); }, sphere() { out.sphere && out.sphere(); }
+    }) });
+  }
+  // 拡大のしかたが大きく変わったら、形を細かさに合わせて作りなおす
+  function updateDetail() {
+    const k = Math.pow(2, Math.max(0, Math.floor(Math.log2(st.k || 1))));
+    if (k === detailK) return;
+    detailK = k;
+    path = makePath(detailK);
+    pathCache = new WeakMap(); boundsCache = new WeakMap();
+    drawStatic();
+    gPol.selectAll('path.hm-pol').attr('d', pathOf);
+    gEdge.selectAll('path').attr('d', pathOf);
+    gSph.selectAll('path').attr('d', pathOf);
+  }
   function buildBase() {
     pr = GEO.projection(st.view, st.w, st.h);
     labelCache.clear();
-    path = d3.geoPath(pr);
+    detailK = Math.pow(2, Math.max(0, Math.floor(Math.log2(st.k || 1))));
+    path = makePath(detailK);
+    pathCache = new WeakMap(); boundsCache = new WeakMap();
+    drawStatic();
+    renderViews();
+    scheduleRelief(true);
+  }
+  // 年によって変わらないもの（海・陸・経緯線・今の国境・地形）
+  function drawStatic() {
     const { land, countries } = GEO.world();
     landPath = path(land);
     gBase.selectAll('*').remove();
     gBase.append('rect').attr('class', 'hm-sea').attr('x', -st.w).attr('y', -st.h).attr('width', st.w * 3).attr('height', st.h * 3);
     gBase.append('path').attr('class', 'hm-grat').attr('d', path(d3.geoGraticule10()));
-    gBase.append('clipPath').attr('id', uid + 'land').append('path').attr('d', landPath);
     gBase.append('path').attr('class', 'hm-land').attr('d', landPath);
-    gPol.attr('clip-path', `url(#${uid}land)`);
-    gSph.attr('clip-path', `url(#${uid}land)`);
-    gRel.attr('clip-path', `url(#${uid}land)`);
+    // 海の「ふた」：国の色や影は海の上にもはみ出して描き、上から海の色でかくす（切り抜きより、ずっと軽い）
+    gMask.selectAll('*').remove();
+    const W3 = st.w * 4, H3 = st.h * 4;
+    gMask.append('path').attr('class', 'hm-seamask').attr('fill-rule', 'evenodd')
+      .attr('d', `M${-W3},${-H3}H${W3 + st.w}V${H3 + st.h}H${-W3}Z` + landPath);
     gModern.selectAll('*').remove();
-    gModern.append('path').attr('class', 'hm-modern').attr('d', path(topojson.mesh(window.WORLD_TOPO, window.WORLD_TOPO.objects.countries, (a, b) => a !== b)));
+    if (!drawStatic.mesh) drawStatic.mesh = topojson.mesh(window.WORLD_TOPO, window.WORLD_TOPO.objects.countries, (a, b) => a !== b);
+    gModern.append('path').attr('class', 'hm-modern').attr('d', path(drawStatic.mesh));
     buildTerrain();
-    renderViews();
-    scheduleRelief(true);
   }
 
   // --- 陰影起伏を、今の見え方で描きなおす（動かし終わってから） ---
@@ -197,7 +233,7 @@ function createHistMap(host, opts = {}) {
   function buildTerrain() {
     gTerr.selectAll('*').remove(); gWater.selectAll('*').remove();
     const T = terrainData(); if (!T) return;
-    gTerr.attr('clip-path', `url(#${uid}land)`);
+    // 地形も海のふたで隠れる（切り抜きは使わない）
     gTerr.selectAll('path').data(T.regions.filter(f => TCLS[f.properties.c])).join('path')
       .attr('class', f => 'tr-' + TCLS[f.properties.c]).attr('d', path);
     gWater.selectAll('path.tr-lake').data(T.lakes).join('path').attr('class', 'tr-lake').attr('d', path);
@@ -245,7 +281,7 @@ function createHistMap(host, opts = {}) {
     const key = [Math.round(c[0] / (ispan / 6)), Math.round(c[1] / (ispan / 6)), Math.round(ispan), IW, st.year].join(',');
     const ip = d3.geoAzimuthalEqualArea().rotate([-c[0], -c[1]]).clipAngle(90);
     ip.fitExtent([[2, 2], [IW - 2, IH - 2]], { type: 'MultiPoint', coordinates: [[c[0] - ispan / 2, c[1]], [c[0] + ispan / 2, c[1]], [c[0], c[1] - ispan / 3], [c[0], c[1] + ispan / 3]] });
-    const ipath = d3.geoPath(ip);
+    const ipath = d3.geoPath({ stream: out => ip.stream({ _x: NaN, _y: NaN, _n: 0, point(x, y) { if (this._n++ === 0 || Math.abs(x - this._x) + Math.abs(y - this._y) >= 1) { this._x = x; this._y = y; out.point(x, y); } }, lineStart() { this._n = 0; out.lineStart(); }, lineEnd() { out.lineEnd(); }, polygonStart() { out.polygonStart(); }, polygonEnd() { out.polygonEnd(); }, sphere() { out.sphere && out.sphere(); } }) });   // 小さい地図なので、1ピクセルより細かい点はとばす
     isvg.attr('width', IW).attr('height', IH).attr('viewBox', `0 0 ${IW} ${IH}`);
     if (key !== insetKey) {
       insetKey = key;
@@ -313,7 +349,7 @@ function createHistMap(host, opts = {}) {
       .on('click', (ev, f) => { ev.stopPropagation(); select({ type: 'polity', id: f.properties.p.id }); })
       .on('mousemove', (ev, f) => showTip(ev, `<b>${esc(f.properties.p.name)}</b>の${esc(SPHERE_KIND[f.properties.s.kind] || '勢力圏')}<br><span style="font-size:12px">${esc(f.properties.s.name || '')}</span>`))
       .on('mouseleave', hideTip)
-      .merge(ss).attr('d', path).attr('fill', f => `url(#${f.pat})`).attr('stroke', f => f.properties.p.color || '#888');
+      .merge(ss).attr('d', pathOf).attr('fill', f => `url(#${f.pat})`).attr('stroke', f => f.properties.p.color || '#888');
     if (opts.only) feats = feats.filter(f => opts.only.includes(f.properties.p.id));
     const sel = st.sel;
     const ps = gPol.selectAll('path.hm-pol').data(feats, f => f.properties.p.id + '|' + f.properties.s.from);
@@ -323,7 +359,7 @@ function createHistMap(host, opts = {}) {
       .on('mousemove', (ev, f) => showTip(ev, `<b>${esc(f.properties.p.name)}</b> <span class="muted num">${span(f.properties.p.start, f.properties.p.end)}</span>`))
       .on('mouseleave', hideTip)
       .merge(ps)
-      .attr('d', path)
+      .attr('d', pathOf)
       .attr('fill', f => f.properties.p.color || '#888')
       .attr('stroke', f => f.properties.p.color || '#888')
       .classed('sel', f => (sel && sel.type === 'polity' && sel.id === f.properties.p.id) || (st.story && st.story.polities.includes(f.properties.p.id)))
@@ -331,7 +367,7 @@ function createHistMap(host, opts = {}) {
       .order();
     const es = gEdge.selectAll('path').data(feats, f => f.properties.p.id + '|' + f.properties.s.from);
     es.exit().remove();
-    es.enter().append('path').attr('class', 'hm-edge').merge(es).attr('d', path).attr('stroke', f => f.properties.p.color || '#888');
+    es.enter().append('path').attr('class', 'hm-edge').merge(es).attr('d', pathOf).attr('stroke', f => f.properties.p.color || '#888');
     gModern.style('display', st.layers.modern ? null : 'none');
 
     // 人物
@@ -367,7 +403,9 @@ function createHistMap(host, opts = {}) {
   function textW(str, px, display) {
     const key = str + '|' + px + '|' + (display ? 1 : 0);
     if (!mcache.has(key)) {
-      const ff = getComputedStyle(document.documentElement).getPropertyValue(display ? '--font-display' : '--font-body');
+      if (!textW.ff) textW.ff = {}; const kk = display ? 'd' : 'b';
+      if (textW.ff[kk] === undefined) textW.ff[kk] = getComputedStyle(document.documentElement).getPropertyValue(display ? '--font-display' : '--font-body');
+      const ff = textW.ff[kk];
       mctx.font = `${display ? 800 : 700} ${px}px ${ff || 'sans-serif'}`;
       mcache.set(key, mctx.measureText(str).width + (display ? str.length * px * 0.04 : 0));
     }
@@ -481,7 +519,7 @@ function createHistMap(host, opts = {}) {
       const c = labelPoint(f); if (!c) return null;
       const [x, y] = t.apply(c);
       if (!inView(x, y)) return null;
-      const bounds = path.bounds(f); const wpx = (bounds[1][0] - bounds[0][0]) * t.k, hpx = (bounds[1][1] - bounds[0][1]) * t.k;
+      const bounds = boundsOf(f); const wpx = (bounds[1][0] - bounds[0][0]) * t.k, hpx = (bounds[1][1] - bounds[0][1]) * t.k;
       const isSel = sel && sel.type === 'polity' && sel.id === p.id;
       if (!isSel && wpx < 22) return null;
       if (st.view === 'world' && t.k < 1.6 && rank >= 3 && !isSel) return null;
