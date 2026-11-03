@@ -37,6 +37,7 @@ function createHistMap(host, opts = {}) {
         </div>`}
       </div>
       <div class="hm-views"></div>
+      <div class="hm-caption" hidden></div>
       <div class="hm-tip" hidden></div>
     </div>
     ${opts.bar === false ? '' : `<div class="hm-bar">
@@ -524,7 +525,11 @@ function createHistMap(host, opts = {}) {
     const a = pr([lon - span / 2, lat]), b = pr([lon + span / 2, lat]);
     const d = a && b ? Math.hypot(b[0] - a[0], b[1] - a[1]) : st.w;
     const k = clamp(st.w * 0.85 / Math.max(d, 1e-6), 1, 400);
-    const tt = d3.zoomIdentity.translate(st.w / 2 - k * q[0], st.h / 2 - k * q[1]).scale(k);
+    // テロップが出ているときは、その上のあいている所のまん中に
+    const capEl = $('.hm-caption', root);
+    const padB = capEl && !capEl.hidden ? capEl.offsetHeight + 14 : 0;
+    const cy = (st.h - padB) / 2;
+    const tt = d3.zoomIdentity.translate(st.w / 2 - k * q[0], cy - k * q[1]).scale(k);
     // 大きく動くときは、いったん引いてから寄る（どこへ動いたかわかるように）
     const far = Math.abs(Math.log(k / st.t.k)) > 1.5 || Math.hypot(st.t.applyX(q[0]) - st.w / 2, st.t.applyY(q[1]) - st.h / 2) > st.w * 0.6;
     if (far && dur > 0) {
@@ -655,6 +660,7 @@ function createHistMap(host, opts = {}) {
     get view() { return st.view; },
     get sel() { return st.sel; },
     setYear, setView, select, focusOn, stop, setStory, flyTo,
+    caption: $('.hm-caption', root),
     polities: () => feats.map(f => f.properties.p),
     visiblePolities() {
       if (!pr) return [];

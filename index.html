@@ -346,6 +346,29 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .why .y { float: right; font-family: var(--font-data); font-size: 12px; color: var(--muted); }
 .st-why { margin-top: 8px; padding: 6px 9px; border-radius: 8px; background: color-mix(in srgb, var(--ai) 10%, var(--panel)); font-size: 13px; }
 .chainbtn { margin: 6px 0; }
+.hm-caption { position: absolute; left: 10px; right: 54px; bottom: 10px; z-index: 4; background: rgba(20, 17, 12, .82); color: #f6f1e6; border-radius: 12px; padding: 9px 13px 0; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); box-shadow: 0 4px 18px rgba(0,0,0,.3); max-width: 760px; overflow: hidden; }
+.hm.storying .hm-views { display: none !important; }
+.cap-top { display: flex; justify-content: space-between; font-size: 11.5px; color: #d9cfbd; }
+.cap-when { font-weight: 800; color: #ffd76a; display: flex; gap: 10px; flex-wrap: wrap; font-size: 13.5px; }
+.cap-when span:last-child { color: #e8dfcf; font-weight: 500; }
+.cap-title { font-family: var(--font-display); font-weight: 800; font-size: 19px; line-height: 1.35; }
+.cap-text { font-size: 14.5px; line-height: 1.6; max-height: 6.6em; overflow-y: auto; margin-top: 2px; }
+.cap-why { font-size: 12.5px; color: #cfe1f3; margin-top: 4px; }
+.hm-caption.small .cap-text, .hm-caption.small .cap-top { display: none; }
+.cap-ctl { display: flex; gap: 6px; margin: 7px 0 7px; }
+.cap-ctl button { border: 1px solid rgba(255,255,255,.28); background: rgba(255,255,255,.08); color: #fff; border-radius: 9px; padding: 4px 11px; font-size: 14px; }
+.cap-ctl button:disabled { opacity: .35; }
+.cap-ctl .pl { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 46px; }
+.cap-ctl button.on { background: #ffd76a; color: #2a2010; border-color: #ffd76a; }
+.cap-ctl [data-a=end] { margin-left: auto; }
+.cap-bar { height: 3px; margin: 0 -13px; background: rgba(255,255,255,.12); }
+.cap-bar i { display: block; height: 100%; width: 0; background: #ffd76a; }
+.cap-bar i.busy { width: 30%; animation: capbusy 1.4s ease-in-out infinite alternate; }
+@keyframes capbusy { from { margin-left: 0; } to { margin-left: 70%; } }
+@media (max-width: 900px) { .mapview:has(.hm.storying) { grid-template-rows: minmax(420px, 80vh) auto; } }
+@media (max-width: 720px) { .cap-title { font-size: 16px; } .cap-text { font-size: 13.5px; max-height: 5em; } .lbl2 { display: none; } .hm-caption { left: 6px; right: 6px; bottom: 6px; } }
+.ttsrow { display: flex; align-items: center; gap: 6px; font-size: 13.5px; margin-top: 6px; cursor: pointer; }
+.speak.on { background: #ffd76a; border-color: #d9b440; color: #2a2010; }
 .foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 18px; }
 </style>
 </head>

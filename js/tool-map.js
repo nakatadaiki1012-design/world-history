@@ -177,6 +177,7 @@ registerTool('map', {
 
     function polityDetail(p) {
       body.appendChild(back());
+      { const r = el('<div style="float:right"></div>'); r.appendChild(speakBtn(() => `${p.full || p.name}。${span(p.start, p.end)}。${p.text || ''}`)); body.appendChild(r); }
       const reg = REGION[p.region];
       body.appendChild(el(`<div>
         <div class="muted" style="font-size:13px"><span class="sw" style="background:${esc(p.color)}"></span> ${esc(reg ? reg.name : '')}</div>
@@ -218,6 +219,7 @@ registerTool('map', {
     }
     function personDetail(p) {
       body.appendChild(back());
+      { const r = el('<div style="float:right"></div>'); r.appendChild(speakBtn(() => `${p.name}。${p.role || ''}。${lifeSpan(p)}。${p.text || ''}`)); body.appendChild(r); }
       const reg = REGION[p.region];
       const pol = p.polity && POLITY[p.polity];
       const ph = PORTRAITS[p.id];
@@ -265,6 +267,7 @@ registerTool('map', {
     }
     function eventDetail(e) {
       body.appendChild(back());
+      { const r = el('<div style="float:right"></div>'); r.appendChild(speakBtn(() => `${e.title}。${yearLabel(e.year)}。${e.text || ''}`)); body.appendChild(r); }
       const reg = REGION[e.region];
       body.appendChild(el(`<div>
         <div class="muted" style="font-size:13px"><span class="sw" style="background:${KIND_COLOR[e.kind] || '#555'};transform:rotate(45deg);border-radius:2px"></span> ${esc(KIND[e.kind] || '')}・${esc(reg ? reg.name : '')}</div>
@@ -299,11 +302,62 @@ registerTool('map', {
     }
     function startStory(st, i) {
       story = st; playing = true; map.stop(); map.select(null);
+      map.root.classList.add('storying');
       goStep(i || 0, true);
     }
     function endStory() {
-      clearTimeout(stTimer); story = null; playing = false;
+      clearTimeout(stTimer); SPEECH.stop(); story = null; playing = false;
+      map.root.classList.remove('storying'); map.caption.hidden = true;
       map.setStory(null); syncHash(); renderSide();
+    }
+    // 場面の読み上げ用の文
+    const stepSpeech = s => `${yearLabel(s.year)}${s.date ? '、' + s.date : ''}。${s.title}。${s.text || ''}${s.why ? '。' + s.why : ''}`;
+    // 地図の下に重ねる「テロップ」（スクロールしなくても読める）
+    function renderCaption() {
+      const cap = map.caption;
+      if (!story) { cap.hidden = true; return; }
+      const s = story.steps[si], n = story.steps.length;
+      const small = store.get('capSmall', false);
+      cap.hidden = false;
+      cap.className = 'hm-caption' + (small ? ' small' : '');
+      cap.innerHTML = `
+        <div class="cap-top"><span class="cap-story">${esc(story.title)}</span><span class="cap-n num">${si + 1} / ${n}</span></div>
+        <div class="cap-when"><span class="num">${esc(yearLabel(s.year))}</span>${s.date ? ' ' + esc(s.date) : ''}<span>📍 ${esc(s.place || '')}</span></div>
+        <div class="cap-title">${esc(s.title)}</div>
+        <div class="cap-text">${esc(s.text || '')}${s.why ? `<div class="cap-why">🔗 ${esc(s.why)}</div>` : ''}</div>
+        <div class="cap-ctl">
+          <button type="button" data-a="prev" ${si === 0 ? 'disabled' : ''} aria-label="前の場面">◀</button>
+          <button type="button" data-a="play" class="pl" aria-label="${playing ? '止める' : '自動で進む'}">${playing ? '❚❚' : '▶'}</button>
+          <button type="button" data-a="next" ${si === n - 1 ? 'disabled' : ''} aria-label="次の場面">▶▶</button>
+          <button type="button" data-a="tts" class="${SPEECH.on ? 'on' : ''}" ${SPEECH.ok ? '' : 'disabled'} aria-label="音声で読み上げ">${SPEECH.on ? '🔊' : '🔈'}<span class="lbl2"> 読み上げ</span></button>
+          <button type="button" data-a="size" aria-label="テロップの大きさ">${small ? '▴' : '▾'}</button>
+          <button type="button" data-a="end" aria-label="物語をおわる">✕</button>
+        </div>
+        <div class="cap-bar"><i></i></div>`;
+      $$('.cap-ctl button', cap).forEach(b => b.addEventListener('click', e => { e.stopPropagation(); storyCtl(b.dataset.a); }));
+      cap.onclick = e => e.stopPropagation();
+      cap.onpointerdown = e => e.stopPropagation();
+      // 残り時間のバー（読み上げ中は、読みおわるまで）
+      const bar = $('.cap-bar i', cap);
+      if (playing && !SPEECH.on) { const ms = 5200 + (s.text || '').length * 45; bar.style.transition = `width ${ms}ms linear`; requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = '100%'; })); }
+      else if (playing) bar.classList.add('busy');
+      else bar.style.width = '100%';
+    }
+    function storyCtl(a) {
+      if (a === 'prev') goStep(si - 1);
+      else if (a === 'next') goStep(si + 1);
+      else if (a === 'end') endStory();
+      else if (a === 'size') { store.set('capSmall', !store.get('capSmall', false)); renderCaption(); }
+      else if (a === 'tts') {
+        SPEECH.setOn(!SPEECH.on);
+        if (SPEECH.on) { if (playing) schedule(); else SPEECH.speak(stepSpeech(story.steps[si])); }
+        else if (playing) schedule();
+        renderSideNow();
+      } else {
+        playing = !playing;
+        if (playing && si === story.steps.length - 1) goStep(0);
+        else { if (playing) schedule(); else { clearTimeout(stTimer); SPEECH.stop(); } renderSideNow(); }
+      }
     }
     function goStep(i, first) {
       clearTimeout(stTimer);
@@ -319,15 +373,25 @@ registerTool('map', {
         const cands = Object.entries(GEO.VIEWS).filter(([k, x]) => !x.parent && k !== 'world' && inBox(k, s.lon, s.lat)).sort((a, b) => a[1].span - b[1].span);
         v = (s.span || 6) > 25 || !cands.length ? 'world' : cands[0][0];
       }
-      map.flyTo(s.lon, s.lat, s.span || 6, v);
       syncHash(); renderSideNow();
-      if (playing) schedule();
+      map.flyTo(s.lon, s.lat, s.span || 6, v);
+      if (playing) schedule(); else if (SPEECH.on) SPEECH.speak(stepSpeech(s));
     }
+    function nextOrEnd() { if (!story) return; if (si < story.steps.length - 1) goStep(si + 1); else { playing = false; renderSideNow(); } }
     function schedule() {
       clearTimeout(stTimer);
-      const s = story.steps[si];
+      const s = story.steps[si], S = story;
+      if (SPEECH.on && SPEECH.ok) {
+        // 読みおわってから、少し間をおいて次へ
+        const txt = stepSpeech(s);
+        // 声が出ない環境でも止まらないように、長めの予備のタイマーも置く
+        stTimer = setTimeout(() => { if (story === S && playing) { SPEECH.stop(); nextOrEnd(); } }, 9000 + txt.length * 320);
+        SPEECH.speak(txt, () => { if (story === S && playing) { clearTimeout(stTimer); stTimer = setTimeout(nextOrEnd, 1200); } });
+        return;
+      }
+      SPEECH.stop();
       const ms = 5200 + (s.text || '').length * 45;
-      stTimer = setTimeout(() => { if (si < story.steps.length - 1) goStep(si + 1); else { playing = false; renderSideNow(); } }, ms);
+      stTimer = setTimeout(nextOrEnd, ms);
     }
     function storyPanel() {
       const s = story.steps[si];
@@ -350,10 +414,12 @@ registerTool('map', {
           <button type="button" class="btn" data-a="next" ${si === story.steps.length - 1 ? 'disabled' : ''}>次 ▶</button>
         </div>
         <div class="st-bar"><i style="width:${playing ? 0 : 100}%"></i></div>
+        <label class="ttsrow"><input type="checkbox" class="ttsck" ${SPEECH.on ? 'checked' : ''} ${SPEECH.ok ? '' : 'disabled'}> 🔊 音声で読み上げる${SPEECH.ok ? '' : '（このブラウザでは使えません）'}</label>
         ${si === 0 ? `<p class="muted" style="font-size:13.5px">${esc(story.summary || '')}</p>` : ''}
         ${si === story.steps.length - 1 && !playing ? `<p style="font-weight:700">おわり。${esc(story.summary || '')}</p>` : ''}
       </div>`);
       $('.backlink', box).addEventListener('click', endStory);
+      $('.ttsck', box).addEventListener('change', () => storyCtl('tts'));
       // この物語の背景（原因）と、その後（結果）
       const sc = !story.generated && STORY_CAUSES[story.id];
       if (sc && si === 0 && sc.causes && sc.causes.length) {
@@ -381,23 +447,19 @@ registerTool('map', {
       const pe = $('.st-people', box);
       (s.people || []).map(id => PERSON[id]).filter(Boolean).forEach(p => {
         const b = el(`<button type="button" class="chip" style="padding:2px 10px 2px 3px">${portraitImg(p)}${esc(p.name)}</button>`);
-        b.addEventListener('click', () => { playing = false; clearTimeout(stTimer); story = null; map.setStory(null); map.select({ type: 'person', id: p.id }); });
+        b.addEventListener('click', () => { endStory(); map.select({ type: 'person', id: p.id }); });
         pe.appendChild(b);
       });
-      $$('.st-ctl button', box).forEach(b => b.addEventListener('click', () => {
-        const a = b.dataset.a;
-        if (a === 'prev') goStep(si - 1);
-        else if (a === 'next') goStep(si + 1);
-        else { playing = !playing; if (playing && si === story.steps.length - 1) goStep(0); else { if (playing) schedule(); else clearTimeout(stTimer); renderSideNow(); } }
-      }));
+      $$('.st-ctl button', box).forEach(b => b.addEventListener('click', () => storyCtl(b.dataset.a)));
       body.appendChild(box);
       // 自動で進むまでの残り時間のバー
-      if (playing) { const bar = $('.st-bar i', box); const ms = 5200 + (s.text || '').length * 45; bar.style.transition = `width ${ms}ms linear`; requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = '100%'; })); }
+      if (playing && !SPEECH.on) { const bar = $('.st-bar i', box); const ms = 5200 + (s.text || '').length * 45; bar.style.transition = `width ${ms}ms linear`; requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = '100%'; })); }
+      renderCaption();
     }
     const onKey = e => {
       if (!story || /input|textarea|select/i.test(document.activeElement.tagName)) return;
       if (e.key === 'ArrowRight') goStep(si + 1); else if (e.key === 'ArrowLeft') goStep(si - 1);
-      else if (e.key === ' ') { e.preventDefault(); $('.st-ctl [data-a=play]') && $('.st-ctl [data-a=play]').click(); }
+      else if (e.key === ' ') { e.preventDefault(); storyCtl('play'); }
     };
     document.addEventListener('keydown', onKey);
 
@@ -413,7 +475,7 @@ registerTool('map', {
     } else renderSide();
     syncHash();
 
-    return () => { clearInterval(lifeTimer); clearTimeout(timer); clearTimeout(stTimer); document.removeEventListener('keydown', onKey); map.destroy(); };
+    return () => { SPEECH.stop(); clearInterval(lifeTimer); clearTimeout(timer); clearTimeout(stTimer); document.removeEventListener('keydown', onKey); map.destroy(); };
   }
 });
 

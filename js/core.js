@@ -159,3 +159,47 @@ function isLight(c) { const x = d3.color(c); if (!x) return false; const { r, g,
 
 // 授業でよく使う「地図で見る」リンク
 function mapHash(year, view, extra) { return `#map/${year}/${view || 'world'}${extra ? '/' + extra : ''}`; }
+
+// --- 音声の読み上げ（ブラウザに入っている日本語の声を使う。インターネットは不要なことが多い） ---
+const SPEECH = {
+  ok: typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window,
+  on: store.get('tts', false),
+  rate: store.get('ttsRate', 1.05),
+  tok: 0,
+  voice() {
+    const vs = speechSynthesis.getVoices().filter(v => /^ja/i.test(v.lang));
+    return vs.find(v => /Google|Nanami|Kyoko|Haruka|Ayumi|O-ren|Otoya/i.test(v.name)) || vs[0] || null;
+  },
+  // 読みやすく：前221年→紀元前221年、チンギス=カン→チンギスカン、〜→から
+  clean(t) {
+    return String(t || '').replace(/前(\d+)年/g, '紀元前$1年').replace(/前(\d+)/g, '紀元前$1').replace(/[=＝]/g, '').replace(/〜/g, 'から')
+      .replace(/[「」『』]/g, '').replace(/📍|🔗|→/g, '、');
+  },
+  speak(text, onend) {
+    if (!this.ok) { if (onend) setTimeout(onend, 4000); return; }
+    speechSynthesis.cancel();
+    const tok = ++this.tok;
+    const u = new SpeechSynthesisUtterance(this.clean(text));
+    u.lang = 'ja-JP'; u.rate = this.rate;
+    const v = this.voice(); if (v) u.voice = v;
+    const done = () => { if (tok === this.tok) { this.tok++; if (onend) onend(); } };
+    u.onend = done; u.onerror = done;
+    speechSynthesis.speak(u);
+  },
+  speaking() { return this.ok && speechSynthesis.speaking; },
+  stop() { this.tok++; if (this.ok) speechSynthesis.cancel(); },
+  setOn(v) { this.on = v; store.set('tts', v); if (!v) this.stop(); }
+};
+if (SPEECH.ok) { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); }
+// 「🔊 読み上げ」ボタン（もう一度おすと止まる）
+function speakBtn(getText, label = '🔊 読み上げ') {
+  const b = el(`<button type="button" class="chip speak">${label}</button>`);
+  if (!SPEECH.ok) { b.disabled = true; b.title = 'このブラウザでは読み上げが使えません'; }
+  b.addEventListener('click', () => {
+    if (b.classList.contains('on')) { SPEECH.stop(); b.classList.remove('on'); return; }
+    $$('.speak.on').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    SPEECH.speak(getText(), () => b.classList.remove('on'));
+  });
+  return b;
+}

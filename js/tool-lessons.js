@@ -50,6 +50,8 @@ function lessonPage(main, ls, i, done) {
     ${l.think ? `<div class="think"><b>考えよう</b><br>${esc(l.think)}</div>` : ''}
     <h3>確認問題</h3><div class="lqs"></div>
     <div class="lesson-nav"></div>`;
+  // 読み上げ（題・問い・説明）
+  tx.insertBefore(speakBtn(() => `${l.title}。問い。${l.question || ''}。` + (l.body || []).map(b => `${b.h}。${b.p}`).join('。'), '🔊 この授業を読み上げ'), $('.q', tx));
   // 地図ボタン
   const mb = $('.mapbtns', tx);
   (l.maps || []).forEach((m, k) => {
@@ -87,5 +89,5 @@ function lessonPage(main, ls, i, done) {
   const prev = ls[i - 1], next = ls[i + 1];
   nav.appendChild(prev ? el(`<a class="btn" style="text-decoration:none" href="#lessons/${l.course}/${prev.id}">← ${esc(prev.title)}</a>`) : el('<span></span>'));
   nav.appendChild(next ? el(`<a class="btn primary" style="text-decoration:none" href="#lessons/${l.course}/${next.id}">${esc(next.title)} →</a>`) : el(`<a class="btn" style="text-decoration:none" href="#lessons/${l.course}">一覧へ</a>`));
-  return () => map.destroy();
+  return () => { SPEECH.stop(); map.destroy(); };
 }
