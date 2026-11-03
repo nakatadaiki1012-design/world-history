@@ -39,6 +39,21 @@ function simplifyRing(pts, tol) {
 }
 const area = r => { let s = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) s += (r[j][0] - r[i][0]) * (r[j][1] + r[i][1]); return Math.abs(s / 2); };
 
+// 長い辺に点を足す（地図は2点のあいだを大円で描くので、緯線にそった長い辺がふくらまないように）
+function densify(r) {
+  const out = [];
+  for (let i = 0; i < r.length; i++) {
+    const a = r[i], b = r[(i + 1) % r.length];
+    out.push(a);
+    const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (d > 2) {
+      const n = Math.ceil(d / 1);
+      for (let k = 1; k < n; k++) out.push([Math.round((a[0] + (b[0] - a[0]) * k / n) * 100) / 100, Math.round((a[1] + (b[1] - a[1]) * k / n) * 100) / 100]);
+    }
+  }
+  return out;
+}
+
 function compose(rc) {
   let parts = [];
   const want = new Set(rc.adm1 || []), want0 = new Set(rc.adm0 || []);
@@ -65,7 +80,8 @@ function compose(rc) {
   const rings = g.map(poly => poly[0]).filter(r => area(r) >= minArea)
     .map(r => simplifyRing(r, tol).map(([x, y]) => [Math.round(x * 100) / 100, Math.round(y * 100) / 100]))
     .map(r => { const o = []; r.forEach(p => { const l = o[o.length - 1]; if (!l || l[0] !== p[0] || l[1] !== p[1]) o.push(p); }); if (o.length > 1) { const a = o[0], z = o[o.length - 1]; if (a[0] === z[0] && a[1] === z[1]) o.pop(); } return o; })
-    .filter(r => r.length >= 4);
+    .filter(r => r.length >= 4)
+    .map(densify);
   return rings;
 }
 module.exports = { compose, adm1, rivers, world, simplifyRing };
