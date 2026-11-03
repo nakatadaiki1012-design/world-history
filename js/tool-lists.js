@@ -56,7 +56,7 @@ registerTool('stories', {
         grid.appendChild(el(`<a class="pcard" style="--c:${col};text-decoration:none;color:inherit" href="#story/${esc(s.id)}/1">
           ${thumbHtml(`story:${s.id}:1`)}
           <b>▶ ${esc(s.title)}</b>
-          <span class="m">${esc(s.period || '')}・${s.steps.length}場面・${esc((REGION[s.region] || {}).name || '')}${talk ? '・🎙 語りつき' : ''}</span>
+          <span class="m">${esc(s.period || '')}・${s.steps.length}場面・${esc((REGION[s.region] || {}).name || '')}${talk ? '・🎙 くわしい語りつき' : ''}</span>
           <span class="t">${esc(s.summary || '')}</span>
         </a>`));
       });

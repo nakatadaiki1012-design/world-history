@@ -355,7 +355,7 @@ registerTool('map', {
     }
     // 場面の読み上げ用の文
     const stepSpeech = s => `${yearLabel(s.year)}${s.date ? '、' + s.date : ''}。${s.title}。${s.text || ''}${s.why ? '。' + s.why : ''}`;
-    // 「おもしろ語り」：場面に talk（くだけた語り）があれば、テロップと読み上げはそちらを使う
+    // 「くわしい語り」：場面に talk（エピソードをまじえた語り）があれば、テロップと読み上げはそちらを使う
     let talkMode = store.get('talkMode', true);
     const stepBody = s => (talkMode && s.talk) ? s.talk : (s.text || '');
     // 場面を文ごとに読み、読んでいる文をテロップで光らせる
@@ -389,7 +389,7 @@ registerTool('map', {
           <button type="button" data-a="play" class="pl" aria-label="${playing ? '止める' : '自動で進む'}">${playing ? '❚❚' : '▶'}</button>
           <button type="button" data-a="next" ${si === n - 1 ? 'disabled' : ''} aria-label="次の場面">▶▶</button>
           <button type="button" data-a="tts" class="${SPEECH.on ? 'on' : ''}" ${SPEECH.ok ? '' : 'disabled'} aria-label="音声で読み上げ">${SPEECH.on ? '🔊' : '🔈'}<span class="lbl2"> 読み上げ</span></button>
-          ${s.talk ? `<button type="button" data-a="talk" class="${talkMode ? 'on' : ''}" aria-label="語り口の切りかえ">${talkMode ? '🎙 おもしろ語り' : '📄 ふつうの説明'}</button>` : ''}
+          ${s.talk ? `<button type="button" data-a="talk" class="${talkMode ? 'on' : ''}" aria-label="語り口の切りかえ">${talkMode ? '🎙 くわしい語り' : '📄 ふつうの説明'}</button>` : ''}
           <button type="button" data-a="size" aria-label="テロップの大きさ">${small ? '▴' : '▾'}</button>
           <button type="button" data-a="end" aria-label="物語をおわる">✕</button>
         </div>
