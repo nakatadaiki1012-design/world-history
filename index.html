@@ -140,9 +140,12 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 @keyframes stpulse { from { transform: scale(.6); opacity: 1; } to { transform: scale(2.6); opacity: 0; } }
 .st-lab { font-size: calc(12px * var(--ls, 1)); font-weight: 700; fill: var(--ink); stroke: var(--halo); stroke-width: 3.5px; paint-order: stroke; pointer-events: none; }
 .st-lab.main { font-size: calc(14px * var(--ls, 1)); font-weight: 800; }
-.tr-mtn { fill: #8a6d4a; fill-opacity: .16; stroke: none; }
-.tr-des { fill: #e3c27a; fill-opacity: .28; stroke: none; }
-.tr-pla { fill: #a88d63; fill-opacity: .09; stroke: none; }
+.hm-relief { mix-blend-mode: multiply; opacity: .8; pointer-events: none; }
+:root[data-theme="dark"] .hm-relief { opacity: .55; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .hm-relief { opacity: .55; } }
+.tr-mtn { fill: none; stroke: none; }
+.tr-des { fill: #e3c27a; fill-opacity: .2; stroke: none; }
+.tr-pla { fill: none; stroke: none; }
 .tr-tun { fill: #b9c7c9; fill-opacity: .18; stroke: none; }
 .tr-lake { fill: var(--sea); stroke: #7fa6c0; stroke-width: .5; vector-effect: non-scaling-stroke; }
 .tr-riv { fill: none; stroke: #6f9fc4; stroke-linecap: round; vector-effect: non-scaling-stroke; opacity: .85; pointer-events: none; }
@@ -528,6 +531,7 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 <script src="js/geo.js"></script>
 <script src="js/core.js"></script>
 <script src="js/profile.js"></script>
+<script src="js/relief.js"></script>
 <script src="js/histmap.js"></script>
 <script src="js/tool-map.js"></script>
 <script src="js/tool-lists.js"></script>

@@ -70,6 +70,7 @@ function createHistMap(host, opts = {}) {
   const gPol = gZoom.append('g');
   const gModern = gZoom.append('g');
   const gEdge = gZoom.append('g');
+  const gRel = gZoom.append('g').attr('class', 'hm-relief');   // 陰影起伏（国の色の上に乗算でかさねる）
   const gWater = gZoom.append('g');  // 川と湖
   const gOver = svg.append('g');   // 名前・点（拡大しても大きさが変わらない）
   const gTlab = gOver.append('g');   // 地形・町の名前（いちばん下）
@@ -113,6 +114,7 @@ function createHistMap(host, opts = {}) {
     placeOverlay();
     drawInset();
   });
+  zoom.on('end.relief', () => scheduleRelief());
   svg.call(zoom).on('dblclick.zoom', null);
   $$('.hm-tools button[data-z]', root).forEach(b => b.addEventListener('click', () => {
     const z = b.dataset.z;
@@ -149,10 +151,34 @@ function createHistMap(host, opts = {}) {
     gBase.append('path').attr('class', 'hm-land').attr('d', landPath);
     gPol.attr('clip-path', `url(#${uid}land)`);
     gSph.attr('clip-path', `url(#${uid}land)`);
+    gRel.attr('clip-path', `url(#${uid}land)`);
     gModern.selectAll('*').remove();
     gModern.append('path').attr('class', 'hm-modern').attr('d', path(topojson.mesh(window.WORLD_TOPO, window.WORLD_TOPO.objects.countries, (a, b) => a !== b)));
     buildTerrain();
     renderViews();
+    scheduleRelief(true);
+  }
+
+  // --- 陰影起伏を、今の見え方で描きなおす（動かし終わってから） ---
+  let relTok = 0, relTimer = null;
+  function scheduleRelief(now) {
+    clearTimeout(relTimer);
+    relTimer = setTimeout(renderRelief, now ? 30 : 160);
+  }
+  async function renderRelief() {
+    if (opts.mini || !st.layers.terrain || typeof RELIEF === 'undefined' || !pr) { gRel.selectAll('*').remove(); return; }
+    const tok = ++relTok, t = st.t, W = st.w, H = st.h;
+    // 細かさ：画面の1ピクセルが何度か
+    const a = pr.invert(t.invert([W / 2, H / 2])), b = pr.invert(t.invert([W / 2 + 20, H / 2]));
+    const dpp = a && b ? Math.hypot(b[0] - a[0], b[1] - a[1]) / 20 : 1;
+    const scale = dpp > 0.15 ? 0.5 : dpp > 0.06 ? 0.75 : 1;   // 世界全体のときは、半分の細かさで十分
+    const RW = Math.round(W * scale), RH = Math.round(H * scale);
+    const inv = (x, y) => { const q = t.invert([x / scale, y / scale]); const ll = pr.invert(q); if (!ll || !isFinite(ll[0])) return null; const back = pr(ll); return back && Math.abs(back[0] - q[0]) < 2 && Math.abs(back[1] - q[1]) < 2 ? ll : null; };
+    const c = await RELIEF.render(RW, RH, inv, dpp < 0.07, () => tok !== relTok);
+    if (!c || tok !== relTok) return;
+    const x0 = t.invert([0, 0]), x1 = t.invert([W, H]);
+    gRel.selectAll('*').remove();
+    gRel.append('image').attr('href', c.toDataURL('image/jpeg', 0.85)).attr('x', x0[0]).attr('y', x0[1]).attr('width', x1[0] - x0[0]).attr('height', x1[1] - x0[1]).attr('preserveAspectRatio', 'none');
   }
 
   // --- 地形（山脈・砂漠・高原）と川・湖 ---
@@ -189,6 +215,7 @@ function createHistMap(host, opts = {}) {
   }
   function updateTerrain() {
     const on = st.layers.terrain;
+    gRel.style('display', on ? null : 'none');
     gTerr.style('display', on ? null : 'none');
     gWater.style('display', on ? null : 'none');
     if (!on) return;
@@ -797,7 +824,7 @@ function createHistMap(host, opts = {}) {
   setBox.addEventListener('pointerdown', e => e.stopPropagation());
   $$('[data-l]', setBox).forEach(c => {
     const k = c.dataset.l; c.checked = !!st.layers[k];
-    c.addEventListener('change', () => { st.layers[k] = c.checked; store.set('layers', st.layers); draw(); });
+    c.addEventListener('change', () => { st.layers[k] = c.checked; store.set('layers', st.layers); draw(); if (k === 'terrain') { updateTerrain(); scheduleRelief(true); } });
   });
   $$('[data-u]', setBox).forEach(c => {
     const k = c.dataset.u; c.checked = !!ui[k];
