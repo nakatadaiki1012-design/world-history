@@ -60,6 +60,10 @@ const EVENT_FUN = window.EVENT_FUN || {};
 const ERA_BINS = [[-9999, 500, '古代'], [500, 1500, '中世'], [1500, 1800, '近世'], [1800, 1914, '近代'], [1914, 9999, '現代']];
 const eraOf = y => (ERA_BINS.find(b => y >= b[0] && y < b[1]) || ERA_BINS[0])[2];
 const STORY = Object.fromEntries(STORIES.map(s => [s.id, s]));
+const STORY_KIND = { event: 'できごと', person: '人物', theme: 'テーマ' };
+const THEME_NAME = { land: '土地制度', religion: '宗教', war: '戦い方', trade: '交易と貨幣', state: '国家と官僚', science: '文字・科学', society: '社会' };
+const storyKind = s => s.kind || 'event';
+const lifeStoryOf = pid => STORIES.find(s => s.kind === 'person' && s.person === pid);
 
 // --- 画像資料（ウィキメディア・コモンズから読みこむ。ネットにつながっていないときは出さない） ---
 const IMAGES = {};

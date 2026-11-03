@@ -2,7 +2,7 @@
 
 // 一覧の上の「しぼりこみ」。物語と出来事で共通
 function listFilters(box, key, opts, onChange) {
-  const st = Object.assign({ region: '', era: '', course: '', kind: '', sort: 'year', q: '' }, store.get(key, {}));
+  const st = Object.assign({ region: '', era: '', course: '', kind: '', sort: 'year', q: '', skind: '', theme: '' }, store.get(key, {}));
   const save = () => { store.set(key, st); onChange(st); };
   const row = (label, items, field) => {
     const r = el(`<div class="lf-row"><b>${label}</b></div>`);
@@ -10,6 +10,7 @@ function listFilters(box, key, opts, onChange) {
       const b = el(`<button type="button" class="chip" aria-pressed="${st[field] === v}">${c ? `<span class="sw" style="background:${c}"></span>` : ''}${n}</button>`);
       b.addEventListener('click', () => {
         st[field] = st[field] === v && field !== 'sort' ? '' : v;
+        if (field === 'skind') { if (st.skind !== 'theme') st.theme = ''; store.set(key, st); box.innerHTML = ''; listFilters(box, key, opts, onChange); return; }
         $$('button', r).forEach((x, i) => x.setAttribute('aria-pressed', String(items[i][0] === st[field])));
         save();
       });
@@ -17,6 +18,10 @@ function listFilters(box, key, opts, onChange) {
     });
     box.appendChild(r);
   };
+  if (opts.storyKinds) {
+    row('種類', [['', 'すべて'], ['event', '🗺 できごと'], ['person', '👤 人物'], ['theme', '🧭 テーマ']], 'skind');
+    if (st.skind === 'theme' || st.theme) row('テーマ', [['', 'すべて'], ...Object.entries(THEME_NAME).filter(([k]) => STORIES.some(s => s.theme === k)).map(([k, n]) => [k, n])], 'theme');
+  }
   if (opts.search) {
     const s = el(`<div class="lf-row"><input type="search" placeholder="ことばでさがす（例：茶、ペスト、印刷）"></div>`);
     const inp = $('input', s); inp.value = st.q;
@@ -37,13 +42,13 @@ const regionIndex = r => REGIONS.findIndex(x => x.id === r);
 registerTool('stories', {
   name: 'できごとを追う',
   render(main) {
-    main.appendChild(el(`<div class="course-head"><h2>できごとを追う</h2><div class="muted" style="font-size:13.5px">1つのできごとを、地図を動かしながら順に追います。えらぶと地図が開き、自動で進みます（◀ ▶ で1場面ずつ・🔈 で語りの読み上げ）。</div></div>`));
+    main.appendChild(el(`<div class="course-head"><h2>物語でたどる</h2><div class="muted" style="font-size:13.5px">できごと・人物の生涯・テーマ（土地制度・宗教・戦い方など）を、地図を動かしながら順にたどります。えらぶと地図が開き、自動で進みます（◀ ▶ で1場面ずつ・🔈 で語りの読み上げ）。</div></div>`));
     const f = el('<div class="lf" style="max-width:1100px;margin:0 auto 10px"></div>');
     const cnt = el('<div class="muted" style="max-width:1100px;margin:0 auto 6px;font-size:13px"></div>');
     const grid = el('<div class="pgrid" style="max-width:1100px;margin:0 auto"></div>');
     main.appendChild(f); main.appendChild(cnt); main.appendChild(grid);
-    listFilters(f, 'storyFilter', {}, st => {
-      const ss = STORIES.filter(s => (!st.region || s.region === st.region) && (!st.era || eraOf(s.steps[0].year) === st.era) && (!st.course || (s.tags || []).includes(st.course)));
+    listFilters(f, 'storyFilter', { storyKinds: true }, st => {
+      const ss = STORIES.filter(s => (!st.skind || storyKind(s) === st.skind) && (!st.theme || s.theme === st.theme) && (!st.region || s.region === st.region) && (!st.era || eraOf(s.steps[0].year) === st.era) && (!st.course || (s.tags || []).includes(st.course)));
       ss.sort((a, b) => st.sort === 'region' ? regionIndex(a.region) - regionIndex(b.region) || a.steps[0].year - b.steps[0].year : (st.sort === 'year-desc' ? -1 : 1) * (a.steps[0].year - b.steps[0].year));
       cnt.textContent = `${ss.length}本`;
       grid.innerHTML = '';
@@ -55,8 +60,8 @@ registerTool('stories', {
         const talk = s.steps.some(x => x.talk);
         grid.appendChild(el(`<a class="pcard" style="--c:${col};text-decoration:none;color:inherit" href="#story/${esc(s.id)}/1">
           ${thumbHtml(`story:${s.id}:1`)}
-          <b>▶ ${esc(s.title)}</b>
-          <span class="m">${esc(s.period || '')}・${s.steps.length}場面・${esc((REGION[s.region] || {}).name || '')}${talk ? '・🎙 くわしい語りつき' : ''}</span>
+          <b>${storyKind(s) === 'person' ? '👤' : storyKind(s) === 'theme' ? '🧭' : '▶'} ${esc(s.title)}</b>
+          <span class="m">${esc(STORY_KIND[storyKind(s)])}${s.theme ? '（' + esc(THEME_NAME[s.theme] || '') + '）' : ''}・${esc(s.period || '')}・${s.steps.length}場面・${esc((REGION[s.region] || {}).name || '')}${talk ? '・🎙 語りつき' : ''}</span>
           <span class="t">${esc(s.summary || '')}</span>
         </a>`));
       });
