@@ -1,9 +1,12 @@
 /* 用語集：ウィキのように、本文の用語をおすとその用語のページ（小さな窓）が開く。用語集の一覧ページとクイズにも使う */
-const GLOSSARY = (() => {
+const GLOSSARY = [];
+const TERM = {};
+function absorbGlossary() {
   const seen = new Set();
-  return (window.GLOSSARY || []).filter(g => g && g.term && g.def && !seen.has(g.term) && seen.add(g.term));
-})();
-const TERM = Object.fromEntries(GLOSSARY.map(g => [g.term, g]));
+  GLOSSARY.length = 0;
+  (window.GLOSSARY || []).forEach(g => { if (g && g.term && g.def && !seen.has(g.term)) { seen.add(g.term); GLOSSARY.push(g); TERM[g.term] = g; } });
+  _termRe = null;
+}
 const TERM_CAT_ORDER = ['国家・王朝', '人物', '事件・戦争', '条約・宣言', '制度・政策', '思想・宗教', '文化・学問', '経済・社会', '地名・地域', '組織・運動'];
 
 // 本文の中の用語に印をつける（1つの文章で同じ語は最初の1回だけ。長い語を先に）

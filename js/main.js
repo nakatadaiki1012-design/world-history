@@ -5,6 +5,16 @@ const GROUPS = [
   { id: 'class', name: '授業<span class="lbl">モード</span>', secs: [['lessons/sogo', '歴史総合'], ['lessons/tankyu', '世界史探究']] }
 ];
 
+// 地図に要らないデータ（物語・授業・画像・読み・用語・地形・経済）は、地図を出したあとで読みこむ
+const LATE_FILES = ["causes", "lessons-sogo", "lessons-tankyu", "stories", "stories-more", "stories-more2", "stories-people", "stories-people2", "stories-people3", "stories-people4", "stories-people5", "stories-themes", "story-talk", "people-detail", "event-fun", "images", "images-more", "images-more2", "yomi-auto", "yomi-1", "yomi-2", "yomi-3", "yomi-4", "yomi-5", "yomi-6", "yomi-7", "yomi-8", "yomi-9", "glossary-1", "glossary-2", "glossary-3", "glossary-4", "terrain", "econ"];
+let lateReady = false;
+function loadLate() {
+  let left = LATE_FILES.length;
+  const done = () => { if (--left > 0) return; absorbLate(); lateReady = true; window.dispatchEvent(new Event('lateready')); if (waitingRoute) { waitingRoute = false; route(); } };
+  LATE_FILES.forEach(f => { const sc = document.createElement('script'); sc.src = `js/data/${f}.js`; sc.async = false; sc.onload = sc.onerror = done; document.head.appendChild(sc); });
+}
+let waitingRoute = false;
+
 let current = null;
 function route() {
   const h = decodeURIComponent(location.hash.replace(/^#/, '')) || 'map';
@@ -38,6 +48,11 @@ function route() {
   if (current) { try { current(); } catch (e) { /* 片づけの失敗は無視 */ } }
   const main = $('#main');
   main.innerHTML = '';
+  if (!lateReady && id !== 'map') {
+    current = null; waitingRoute = true;
+    main.appendChild(el('<p class="loading" style="text-align:center;margin-top:30vh;color:var(--muted)">物語や用語のデータを読みこんでいます…</p>'));
+    setTopHeight(); return;
+  }
   current = TOOLS[id].render(main, params) || null;
   const title = id === 'lessons' ? COURSE[params.course] : TOOLS[id].name;
   document.title = `${title} | 世界史ラボ`;
@@ -58,3 +73,5 @@ function setTopHeight() { document.documentElement.style.setProperty('--top-h', 
 window.addEventListener('hashchange', route);
 window.addEventListener('resize', setTopHeight);
 route();
+// 地図をかき終えてから、残りを読みこむ
+requestAnimationFrame(() => setTimeout(loadLate, 30));

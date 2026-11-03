@@ -173,6 +173,9 @@ function createHistMap(host, opts = {}) {
     gEdge.selectAll('path').attr('d', pathOf);
     gSph.selectAll('path').attr('d', pathOf);
   }
+  // 地形などのデータがあとから届いたら、かき直す
+  function onLate() { if (pr) { drawStatic(); draw(); } }
+  window.addEventListener('lateready', onLate);
   function buildBase() {
     pr = GEO.projection(st.view, st.w, st.h);
     labelCache.clear();
@@ -971,6 +974,6 @@ function createHistMap(host, opts = {}) {
     },
     people: () => shownPeople.filter(x => !x.ghost),
     events: () => shownEvents,
-    destroy() { stop(); ro.disconnect(); root.remove(); }
+    destroy() { stop(); ro.disconnect(); window.removeEventListener('lateready', onLate); root.remove(); }
   };
 }

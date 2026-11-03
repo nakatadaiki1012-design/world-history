@@ -336,6 +336,7 @@ registerTool('map', {
     function storiesTab() {
       const y = map.year;
       body.appendChild(el(`<p class="muted" style="font-size:13px">1つのできごとを、地図を動かしながら順に追います。▶ をおすと自動で進みます。${esc(yearLabel(y))}に近いものから並んでいます。</p>`));
+      if (!STORIES.length) { body.appendChild(el('<p class="muted">物語を読みこんでいます…</p>')); return; }
       const ul = el('<ul class="lst"></ul>');
       STORIES.slice().sort((a, b) => Math.abs(a.steps[0].year - y) - Math.abs(b.steps[0].year - y)).forEach(st => {
         const li = el(`<li><button type="button"><span class="sw" style="background:${(REGION[st.region] || {}).color || '#555'}"></span><span><b>${esc(st.title)}</b><br><span class="muted" style="font-size:12px">${esc(st.period || '')}・${st.steps.length}場面</span></span></button></li>`);
@@ -561,7 +562,10 @@ registerTool('map', {
     } else renderSide();
     syncHash();
 
-    return () => { SPEECH.stop(); clearInterval(lifeTimer); clearTimeout(timer); clearTimeout(stTimer); document.removeEventListener('keydown', onKey); map.destroy(); };
+    // 物語・画像・用語などがあとから届いたら、横の欄をかき直す（物語の再生中はそのまま）
+    const onLate = () => { if (!story) renderSideNow(); };
+    window.addEventListener('lateready', onLate);
+    return () => { SPEECH.stop(); clearInterval(lifeTimer); clearTimeout(timer); clearTimeout(stTimer); document.removeEventListener('keydown', onKey); window.removeEventListener('lateready', onLate); map.destroy(); };
   }
 });
 

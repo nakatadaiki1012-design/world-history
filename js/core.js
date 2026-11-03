@@ -48,12 +48,11 @@ const PEOPLE = (window.PEOPLE || []).filter(p => p && p.id && p.name).sort((a, b
 })();
 const PERSON = Object.fromEntries(PEOPLE.map(p => [p.id, p]));
 const EVENTS = (() => { const seen = new Set(); return (window.EVENTS || []).filter(e => e && e.title && !seen.has(e.title) && seen.add(e.title)).sort((a, b) => a.year - b.year); })();
-const LESSONS = (window.LESSONS || []).filter(l => l && l.id);
+const LESSONS = [];
 const PORTRAITS = window.PORTRAITS || {};
-const STORIES = (window.STORIES || []).filter(s => s && s.id && s.steps && s.steps.length);
-// 物語の「語り」（おもしろく話す版）を場面にくっつける
-(function () { const T = window.STORY_TALK || {}; STORIES.forEach(s => { const a = T[s.id]; if (a) s.steps.forEach((st, i) => { if (a[i] && !st.talk) st.talk = a[i]; }); }); })();
-const PERSON_DETAIL = window.PERSON_DETAIL || {};
+// 物語・授業・画像・用語などは、地図を先に出すため、あとから読みこむ（absorbLate で中身を入れる）
+const STORIES = [];
+const PERSON_DETAIL = {};
 // 歴史的な地名（時代によって名前が変わる町）
 const PLACES = (window.PLACES || []).filter(p => p && p.id && p.names && p.names.length);
 const PLACE = Object.fromEntries(PLACES.map(p => [p.id, p]));
@@ -65,10 +64,10 @@ function nearPlace(lon, lat, d = 0.35) {
   PLACES.forEach(p => { const dd = Math.hypot((p.lon - lon) * Math.cos(lat * Math.PI / 180), p.lat - lat); if (dd < bd) { bd = dd; best = p; } });
   return best;
 }
-const EVENT_FUN = window.EVENT_FUN || {};
+const EVENT_FUN = {};
 const ERA_BINS = [[-9999, 500, '古代'], [500, 1500, '中世'], [1500, 1800, '近世'], [1800, 1914, '近代'], [1914, 9999, '現代']];
 const eraOf = y => (ERA_BINS.find(b => y >= b[0] && y < b[1]) || ERA_BINS[0])[2];
-const STORY = Object.fromEntries(STORIES.map(s => [s.id, s]));
+const STORY = {};
 const STORY_KIND = { event: 'できごと', person: '人物', theme: 'テーマ' };
 const THEME_NAME = { land: '土地制度', religion: '宗教', war: '戦い方', trade: '交易と貨幣', state: '国家と官僚', science: '文字・科学', society: '社会' };
 const storyKind = s => s.kind || 'event';
@@ -76,7 +75,6 @@ const lifeStoryOf = pid => STORIES.find(s => s.kind === 'person' && s.person ===
 
 // --- 画像資料（ウィキメディア・コモンズから読みこむ。ネットにつながっていないときは出さない） ---
 const IMAGES = {};
-(window.IMAGES || []).forEach(m => { if (m && m.key && m.file) (IMAGES[m.key] = IMAGES[m.key] || []).push(m); });
 const commonsUrl = (file, w) => `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file.replace(/ /g, '_'))}?width=${w}`;
 function figureHtml(key, max = 1) {
   const ms = (IMAGES[key] || []).slice(0, max);
@@ -99,8 +97,25 @@ document.addEventListener('click', e => {
 
 // --- 原因と結果 ---
 const EVENT_IDX = Object.fromEntries(EVENTS.map((e, i) => [e.title, i]));
-const CAUSES = (window.CAUSES || []).filter(c => c && EVENT_IDX[c.from] != null && EVENT_IDX[c.to] != null);
-const STORY_CAUSES = window.STORY_CAUSES || {};
+const CAUSES = [];
+const STORY_CAUSES = {};
+// あとから読みこんだデータを、上の入れものに入れる（何度よんでも同じ結果）
+function absorbLate() {
+  const fill = (arr, src) => { arr.length = 0; src.forEach(x => arr.push(x)); };
+  fill(LESSONS, (window.LESSONS || []).filter(l => l && l.id));
+  fill(STORIES, (window.STORIES || []).filter(s => s && s.id && s.steps && s.steps.length));
+  const T = window.STORY_TALK || {};
+  STORIES.forEach(s => { const a = T[s.id]; if (a) s.steps.forEach((st, i) => { if (a[i] && !st.talk) st.talk = a[i]; }); });
+  STORIES.forEach(s => { STORY[s.id] = s; });
+  Object.assign(PERSON_DETAIL, window.PERSON_DETAIL || {});
+  Object.assign(EVENT_FUN, window.EVENT_FUN || {});
+  Object.keys(IMAGES).forEach(k => delete IMAGES[k]);
+  (window.IMAGES || []).forEach(m => { if (m && m.key && m.file) (IMAGES[m.key] = IMAGES[m.key] || []).push(m); });
+  fill(CAUSES, (window.CAUSES || []).filter(c => c && EVENT_IDX[c.from] != null && EVENT_IDX[c.to] != null));
+  Object.assign(STORY_CAUSES, window.STORY_CAUSES || {});
+  if (typeof absorbGlossary === 'function') absorbGlossary();
+  SPEECH.resetDict();
+}
 const CAUSE_KIND = { background: '背景', cause: '原因', trigger: 'きっかけ', result: '結果' };
 const causesOf = i => CAUSES.filter(c => c.to === EVENTS[i].title).map(c => ({ i: EVENT_IDX[c.from], kind: c.kind, why: c.why }));
 const resultsOf = i => CAUSES.filter(c => c.from === EVENTS[i].title).map(c => ({ i: EVENT_IDX[c.to], kind: c.kind, why: c.why }));
