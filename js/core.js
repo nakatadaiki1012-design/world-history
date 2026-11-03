@@ -37,6 +37,15 @@ const POLITIES = (window.POLITIES || []).filter(p => p && p.id && p.name);
 })();
 const POLITY = Object.fromEntries(POLITIES.map(p => [p.id, p]));
 const PEOPLE = (window.PEOPLE || []).filter(p => p && p.id && p.name).sort((a, b) => a.born - b.born);
+// 人物データの polity が古い書き方の id のときは、今の id に読みかえる（年代でえらぶものは関数）
+(function () {
+  const A = { babylonia: 'babylon1', macedonia: 'macedon', 'roman-republic': 'rome-republic', 'roman-empire': y => (y > 394 ? 'west-rome' : 'rome-empire'),
+    zhou: y => (y < -770 ? 'xizhou' : 'dongzhou'), 'han-former': 'qianhan', 'han-later': 'gohan', wei: 'wei-sanguo', shu: 'shu-sanguo', 'jin-east': 'dongjin',
+    'northern-wei': 'beiwei', 'song-north': 'beisong', 'song-south': 'nansong', 'golden-horde': 'kipchak', ilkhanate: 'ilkhan', 'mongol-tatar': 'tatar',
+    rok: 'south-korea', dprk: 'north-korea', british: y => (y >= 1914 ? 'uk' : 'britain'), timurid: 'timur', pahlavi: 'iran-pahlavi', saudi: 'saudi-arabia',
+    iran: y => (y >= 1979 ? 'iran-islamic' : 'iran-pahlavi'), franks: 'frank', papacy: 'papal', habsburg: 'austria', soviet: y => (y < 1922 ? 'soviet-russia' : 'ussr') };
+  PEOPLE.forEach(p => { const a = A[p.polity]; if (!a) return; const mid = Math.round((p.born + p.died) / 2); p.polity = typeof a === 'function' ? a(mid) : a; });
+})();
 const PERSON = Object.fromEntries(PEOPLE.map(p => [p.id, p]));
 const EVENTS = (() => { const seen = new Set(); return (window.EVENTS || []).filter(e => e && e.title && !seen.has(e.title) && seen.add(e.title)).sort((a, b) => a.year - b.year); })();
 const LESSONS = (window.LESSONS || []).filter(l => l && l.id);
