@@ -13,144 +13,134 @@ const roleGroup = p => ROLE_GROUPS.find(g => g.re.test(p.role || '')) || ROLE_GR
 registerTool('ptl', {
   name: '人物年表',
   render(main) {
-    const wrap = el(`<div class="chrono">
+    const wrap = el(`<div class="chrono ptl">
       <div class="chrono-main">
-        <div class="chrono-head"></div>
-        <div class="chrono-head ptl-roles"></div>
-        <div class="chrono-svgwrap"><svg></svg></div>
+        <div class="ptl-head">
+          <label class="ptl-sel">地域 <select class="ptl-reg"></select></label>
+          <label class="ptl-sel">時代 <select class="ptl-era"></select></label>
+          <span class="muted ptl-count"></span>
+        </div>
+        <div class="ptl-roles"></div>
+        <div class="chrono-svgwrap ptl-body"></div>
       </div>
       <aside class="side"><div class="side-body"></div></aside>
     </div>`);
     main.appendChild(wrap);
-    const head = $('.chrono-head', wrap), rolesBar = $('.ptl-roles', wrap), sw = $('.chrono-svgwrap', wrap), body = $('.side-body', wrap);
-    const svg = d3.select($('svg', wrap));
+    const regSel = $('.ptl-reg', wrap), eraSel = $('.ptl-era', wrap), rolesBar = $('.ptl-roles', wrap), sw = $('.ptl-body', wrap), body = $('.side-body', wrap), cnt = $('.ptl-count', wrap);
     let year = store.get('year', 750);
     let region = store.get('ptlRegion', 'east');
+    let eraF = store.get('ptlEra', '');
     let roles = new Set(store.get('ptlRoles', ROLE_GROUPS.map(g => g.id)));
     let sel = null;
-    let t = d3.zoomIdentity;
 
-    // 地域（1つえらぶ。「すべて」もある）
-    const regs = [{ id: 'all', name: 'すべての地域', color: '#555' }, ...REGIONS.filter(r => PEOPLE.some(p => p.region === r.id))];
-    regs.forEach(r => {
-      const b = el(`<button type="button" class="chip" data-r="${r.id}"><span class="sw" style="background:${r.color}"></span>${esc(r.name)}</button>`);
-      b.addEventListener('click', () => { region = r.id; store.set('ptlRegion', region); sel = null; markRegion(); fit(); side(); });
-      head.appendChild(b);
-    });
-    const markRegion = () => $$('[data-r]', head).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.r === region)));
-    markRegion();
-    const zin = el('<button type="button" class="chip" style="margin-left:auto">＋ 拡大</button>'), zout = el('<button type="button" class="chip">－ 縮小</button>'), zfit = el('<button type="button" class="chip">⟷ 全体</button>');
-    head.appendChild(zin); head.appendChild(zout); head.appendChild(zfit);
-    // 人物の種類
+    // 地域・時代（セレクトで、スマホでも場所をとらない）
+    const regs = [{ id: 'all', name: 'すべての地域' }, ...REGIONS.filter(r => PEOPLE.some(p => p.region === r.id))];
+    regSel.innerHTML = regs.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
+    regSel.value = region;
+    regSel.addEventListener('change', () => { region = regSel.value; store.set('ptlRegion', region); sel = null; draw(); side(); sw.scrollTop = 0; });
+    const ERAS_P = ERA_BINS.map(b => ({ name: b[2], a: b[0], b: b[1] }));
+    eraSel.innerHTML = '<option value="">すべての時代</option>' + ERAS_P.map(e => `<option value="${e.name}">${e.name}</option>`).join('');
+    eraSel.value = eraF;
+    eraSel.addEventListener('change', () => { eraF = eraSel.value; store.set('ptlEra', eraF); draw(); sw.scrollTop = 0; });
+    const markRegion = () => { regSel.value = region; };
+    // 人物の種類（1行で横にスクロール）
     ROLE_GROUPS.forEach(g => {
       const b = el(`<button type="button" class="chip" aria-pressed="${roles.has(g.id)}"><span class="sw" style="background:${g.color}"></span>${esc(g.name)}</button>`);
       b.addEventListener('click', () => { roles.has(g.id) ? roles.delete(g.id) : roles.add(g.id); if (!roles.size) roles.add(g.id); b.setAttribute('aria-pressed', String(roles.has(g.id))); store.set('ptlRoles', [...roles]); draw(); });
       rolesBar.appendChild(b);
     });
 
-    const LEFT = 8, ROW = 26, TOP = 22;
-    let W = 800;
-    const zoom = d3.zoom().scaleExtent([1, 60])
-      .filter(ev => (ev.type !== 'wheel' || ev.ctrlKey || ev.shiftKey) && !ev.button)
-      .on('zoom', ev => { t = ev.transform; draw(); });
-    svg.call(zoom).on('dblclick.zoom', null);
-    zin.addEventListener('click', () => svg.transition().duration(250).call(zoom.scaleBy, 1.8, [xOf(year), 10]));
-    zout.addEventListener('click', () => svg.transition().duration(250).call(zoom.scaleBy, 1 / 1.8, [xOf(year), 10]));
-    zfit.addEventListener('click', fit);
-
-    const base = y => LEFT + yearToPos(y) / 100 * (W - LEFT - 12);
-    const xOf = y => t.applyX(base(y));
-    const yearOfX = x => posToYear((t.invertX(x) - LEFT) / (W - LEFT - 12) * 100);
     const people = () => PEOPLE.filter(p => (region === 'all' || p.region === region) && roles.has(roleGroup(p).id));
+    // 人物がいちばん活躍したころ（30〜40歳ごろ）で、どの時代の段に入れるかを決める
+    const prime = p => Math.min(p.died, p.born + Math.min(38, Math.round((p.died - p.born) * 0.6)));
 
-    // えらんだ地域の人物がちょうど入るように拡大
-    function fit() {
-      W = Math.max(500, sw.clientWidth);
-      const ps = PEOPLE.filter(p => region === 'all' || p.region === region);
-      if (!ps.length) { t = d3.zoomIdentity; svg.call(zoom.transform, t); return; }
-      const a = base(d3.min(ps, p => p.born) - 20), b = base(d3.max(ps, p => p.died) + 20);
-      const k = clamp((W - 30) / Math.max(1, b - a), 1, 60);
-      t = d3.zoomIdentity.translate(15 - a * k, 0).scale(k);
-      svg.call(zoom.transform, t);
-    }
-
+    // 時代ごとに「段」を分け、段ごとに横軸をのばす（古い時代がつぶれないように）
     function draw() {
-      W = Math.max(500, sw.clientWidth);
-      zoom.extent([[0, 0], [W, 100]]).translateExtent([[0, 0], [W, 100]]);
-      svg.selectAll('*').remove();
-      const g = svg.append('g');
-      let y0 = TOP + 6;
-      // その地域の主な国・王朝（上の細い帯）
-      const pols = POLITIES.filter(p => (region === 'all' ? (p.rank || 2) === 1 : p.region === region && ((p.rank || 2) === 1 || ((p.rank || 2) === 2 && p.end - p.start >= 150)))).sort((a, b) => (a.rank || 2) - (b.rank || 2) || (b.end - b.start) - (a.end - a.start));
-      const lanesP = [], MAXL = 5;   // 帯は5段まで（大きい国・長く続いた国から）
-      pols.forEach(p => {
-        const x0 = xOf(p.start), x1 = Math.max(xOf(Math.min(p.end, YEAR_MAX)), x0 + 2);
-        if (x1 < 0 || x0 > W) return;
-        const xe = Math.max(x1, x0 + p.name.length * 10 + 4);
-        let i = lanesP.findIndex(L => L.every(([a, b]) => xe < a - 2 || x0 > b + 2));
-        if (i < 0) { if (lanesP.length >= MAXL) return; i = lanesP.length; lanesP.push([]); }
-        lanesP[i].push([x0, xe]);
-        const yy = y0 + i * 15;
-        const gg = g.append('g').attr('class', 'ptl-pol');
-        gg.append('rect').attr('x', Math.max(x0, -5)).attr('y', yy).attr('width', Math.max(2, x1 - Math.max(x0, -5))).attr('height', 13).attr('rx', 3).attr('fill', p.color).attr('opacity', 0.75)
-          .append('title').text(`${p.name}（${span(p.start, p.end)}）`);
-        if (x1 - Math.max(x0, 0) > p.name.length * 10 + 4) gg.append('text').attr('x', Math.max(x0, 0) + 3).attr('y', yy + 10.5).text(p.name).attr('fill', isLight(p.color) ? '#1f1d1a' : '#fff');
-      });
-      y0 += Math.max(1, lanesP.length) * 15 + 10;
-      g.append('line').attr('x1', 0).attr('x2', W).attr('y1', y0 - 5).attr('y2', y0 - 5).attr('stroke', 'var(--line)');
-
-      // 人物の帯（生まれた順。名前が入らないときは帯の右に）
-      const ps = people().slice().sort((a, b) => a.born - b.born);
-      const lanes = [];
-      ps.forEach(p => {
-        const x0 = xOf(p.born), x1 = Math.max(xOf(p.died), x0 + 3);
-        const ph = !!PORTRAITS[p.id];
-        const nameW = p.name.length * 12.5 + (ph ? 24 : 6);
-        const inside = x1 - x0 > nameW + 6;
-        const end = inside ? x1 : x1 + nameW + 4;
-        let i = lanes.findIndex(e => e < x0 - 4); if (i < 0) { i = lanes.length; lanes.push(-1e9); }
-        lanes[i] = end; p._lane = i; p._x0 = x0; p._x1 = x1; p._in = inside;
-      });
-      ps.forEach(p => {
-        if (p._x1 < -200 || p._x0 > W + 10) return;
-        const yy = y0 + p._lane * ROW, grp = roleGroup(p), c = grp.color;
-        const gg = g.append('g').attr('class', 'ptl-p' + (sel === p.id ? ' sel' : '')).style('cursor', 'pointer');
-        gg.append('rect').attr('x', p._x0).attr('y', yy + 3).attr('width', p._x1 - p._x0).attr('height', ROW - 6).attr('rx', 10).attr('fill', c).attr('fill-opacity', 0.22).attr('stroke', c).attr('stroke-width', sel === p.id ? 2.4 : 1);
-        let tx = (p._in ? p._x0 : p._x1) + 6;
-        if (PORTRAITS[p.id]) {
-          const cid = 'pc' + p.id.replace(/[^a-z0-9]/gi, '');
-          gg.append('clipPath').attr('id', cid).append('circle').attr('cx', tx + 9).attr('cy', yy + ROW / 2).attr('r', 9);
-          gg.append('image').attr('href', PORTRAITS[p.id].src).attr('x', tx).attr('y', yy + ROW / 2 - 9).attr('width', 18).attr('height', 18).attr('preserveAspectRatio', 'xMidYMin slice').attr('clip-path', `url(#${cid})`);
-          gg.append('circle').attr('cx', tx + 9).attr('cy', yy + ROW / 2).attr('r', 9).attr('fill', 'none').attr('stroke', c).attr('stroke-width', 1.2);
-          tx += 22;
+      const W = Math.max(320, sw.clientWidth - 2);
+      sw.innerHTML = '';
+      const ps = people();
+      cnt.textContent = `${ps.length}人`;
+      const S = W < 600 ? 0.9 : 1;
+      ERAS_P.forEach(E => {
+        if (eraF && eraF !== E.name) return;
+        const list = ps.filter(p => { const y = prime(p); return y >= E.a && y < E.b; }).sort((a, b) => a.born - b.born);
+        if (!list.length) return;
+        const lo = Math.min(Math.max(E.a, -3000), d3.min(list, p => p.born)) - 10, hi = Math.max(Math.min(E.b, 2025), d3.max(list, p => p.died)) + 10;
+        const x0 = Math.max(lo, d3.min(list, p => p.born) - 15), x1 = Math.min(hi, d3.max(list, p => p.died) + 15);
+        const L = 10, R = 10;
+        const xs = d3.scaleLinear().domain([x0, x1]).range([L, W - R]);
+        const sec = el(`<section class="ptl-sec"><h3 class="ptl-era-h">${esc(E.name)}<small>${esc(yearLabel(Math.round(x0)))}〜${esc(yearLabel(Math.round(x1)))}・${list.length}人</small></h3></section>`);
+        sw.appendChild(sec);
+        const svg = d3.select(sec).append('svg').attr('width', W);
+        const g = svg.append('g');
+        let y0 = 18;
+        // 目盛り
+        const span = x1 - x0, step = [500, 200, 100, 50, 25, 10, 5].find(s => span / s >= 4 && span / s <= 12) || 10;
+        const ax = g.append('g').attr('class', 'c-axis');
+        for (let yy = Math.ceil(x0 / step) * step; yy <= x1; yy += step) {
+          const v = yy === 0 ? 1 : yy, x = xs(v);
+          ax.append('line').attr('x1', x).attr('x2', x).attr('y1', 14).attr('y2', 9999).attr('stroke-dasharray', '2 4');
+          ax.append('text').attr('x', x).attr('y', 10).attr('text-anchor', 'middle').text(v < 0 ? '前' + (-v) : v);
         }
-        gg.append('text').attr('x', tx).attr('y', yy + ROW / 2 + 4.5).attr('class', 'ptl-name').text(p.name);
-        gg.append('title').text(`${p.name}（${lifeSpan(p)}）${p.role || ''}`);
-        gg.on('click', ev => { ev.stopPropagation(); sel = p.id; if (year < p.born || year > p.died) year = Math.round((p.born + p.died) / 2); store.set('year', year); draw(); side(); });
+        // その地域・時代の主な国（細い帯・3段まで）
+        const pols = POLITIES.filter(p => (region === 'all' ? (p.rank || 2) === 1 : p.region === region && (p.rank || 2) <= 2) && p.start < x1 && p.end > x0)
+          .sort((a, b) => (a.rank || 2) - (b.rank || 2) || (b.end - b.start) - (a.end - a.start));
+        const lanesP = [];
+        pols.forEach(p => {
+          const a = xs(Math.max(p.start, x0)), b = Math.max(xs(Math.min(p.end, x1)), a + 2);
+          const tw = p.name.length * 10 + 6, e = Math.max(b, a + tw);
+          let i = lanesP.findIndex(Lr => Lr.every(([u, v]) => e < u - 2 || a > v + 2));
+          if (i < 0) { if (lanesP.length >= 3) return; i = lanesP.length; lanesP.push([]); }
+          lanesP[i].push([a, e]);
+          const yy = y0 + i * 14;
+          const gg = g.append('g').attr('class', 'ptl-pol');
+          gg.append('rect').attr('x', a).attr('y', yy).attr('width', b - a).attr('height', 12).attr('rx', 3).attr('fill', p.color).attr('opacity', 0.55).append('title').text(`${p.name}（${span2(p)}）`);
+          if (b - a > tw) gg.append('text').attr('x', a + 3).attr('y', yy + 9.5).text(p.name).attr('fill', isLight(p.color) ? '#1f1d1a' : '#fff');
+        });
+        y0 += Math.max(1, lanesP.length) * 14 + 8;
+        // 人物：名前（写真つき）を上に、一生の帯を下に。名前が帯からはみ出しても、同じ段に重ならないように
+        const ROW = Math.round(34 * S);
+        const lanes = [];
+        list.forEach(p => {
+          const a = xs(p.born), b = Math.max(xs(p.died), a + 3);
+          const nameW = textWidth(p.name, 13 * S) + (PORTRAITS[p.id] ? 22 : 0) + 8;
+          const e = Math.max(b, a + nameW) + 8;
+          let i = lanes.findIndex(v => v < a);
+          if (i < 0) { i = lanes.length; lanes.push(0); }
+          lanes[i] = e; p._ln = i; p._a = a; p._b = b;
+        });
+        list.forEach(p => {
+          const yy = y0 + p._ln * ROW, grp = roleGroup(p), c = grp.color, isSel = sel === p.id;
+          const gg = g.append('g').attr('class', 'ptl-p' + (isSel ? ' sel' : '')).style('cursor', 'pointer');
+          gg.append('rect').attr('class', 'hit').attr('x', p._a - 2).attr('y', yy).attr('width', Math.max(p._b - p._a, textWidth(p.name, 13 * S) + 30) + 4).attr('height', ROW - 2).attr('fill', 'transparent');
+          gg.append('rect').attr('class', 'life').attr('x', p._a).attr('y', yy + ROW - 11).attr('width', p._b - p._a).attr('height', 6).attr('rx', 3).attr('fill', c);
+          let tx = p._a;
+          if (PORTRAITS[p.id]) {
+            const cid = 'pc-' + p.id.replace(/[^a-z0-9]/gi, '');
+            gg.append('clipPath').attr('id', cid).append('circle').attr('cx', tx + 9).attr('cy', yy + 10).attr('r', 9);
+            gg.append('image').attr('href', PORTRAITS[p.id].src).attr('x', tx).attr('y', yy + 1).attr('width', 18).attr('height', 18).attr('preserveAspectRatio', 'xMidYMin slice').attr('clip-path', `url(#${cid})`);
+            gg.append('circle').attr('cx', tx + 9).attr('cy', yy + 10).attr('r', 9).attr('fill', 'none').attr('stroke', c).attr('stroke-width', 1.4);
+            tx += 22;
+          }
+          gg.append('text').attr('class', 'ptl-name').attr('x', tx).attr('y', yy + 14).attr('font-size', 13 * S).text(p.name);
+          gg.append('title').text(`${p.name}（${lifeSpan(p)}）${p.role || ''}`);
+          gg.on('click', ev => { ev.stopPropagation(); sel = p.id; year = Math.round((p.born + p.died) / 2); store.set('year', year); draw(); side(); if (window.innerWidth < 900) body.closest('.side').scrollIntoView({ behavior: 'smooth' }); });
+        });
+        const H = y0 + lanes.length * ROW + 8;
+        svg.attr('height', H).attr('viewBox', `0 0 ${W} ${H}`);
+        ax.selectAll('line').attr('y2', H);
+        // 今の年
+        if (year >= x0 && year <= x1) {
+          svg.append('line').attr('class', 'c-cursor').attr('x1', xs(year)).attr('x2', xs(year)).attr('y1', 14).attr('y2', H);
+          svg.append('text').attr('x', xs(year) + 4).attr('y', 24).attr('font-size', 11).attr('font-weight', 800).attr('fill', 'var(--accent)').text(yearLabel(year));
+        }
+        svg.on('click', ev => { const [x] = d3.pointer(ev); year = fixYear(Math.round(xs.invert(x))); store.set('year', year); sel = null; draw(); side(); });
       });
-      const H = Math.max(y0 + lanes.length * ROW + 20, sw.clientHeight);
-      svg.attr('height', H).attr('viewBox', `0 0 ${W} ${H}`);
-      // 目盛り
-      const ax = svg.append('g').attr('class', 'c-axis');
-      const steps = [1000, 500, 200, 100, 50, 20, 10, 5];
-      const span0 = Math.abs(yearOfX(W) - yearOfX(0)) || 1;
-      const step = steps.find(s => span0 / s >= 5) || 5;
-      const s0 = Math.ceil(yearOfX(0) / step) * step;
-      for (let y = s0; y <= yearOfX(W); y += step) {
-        const yy = y === 0 ? 1 : y, x = xOf(yy); if (x < 0 || x > W) continue;
-        ax.append('line').attr('x1', x).attr('x2', x).attr('y1', 16).attr('y2', H).attr('stroke-dasharray', '2 4');
-        ax.append('text').attr('x', x).attr('y', 12).attr('text-anchor', 'middle').text(yy < 0 ? '前' + (-yy) : yy);
-      }
-      ax.lower();
-      const cx = xOf(year);
-      svg.append('line').attr('class', 'c-cursor').attr('x1', cx).attr('x2', cx).attr('y1', 16).attr('y2', H);
-      svg.append('text').attr('x', cx + 4).attr('y', 26).attr('font-size', 12).attr('font-weight', 800).attr('fill', 'var(--accent)').text(yearLabel(year));
-      if (!ps.length) svg.append('text').attr('x', 20).attr('y', y0 + 30).attr('fill', 'var(--muted)').text('この地域・種類の人物は、まだデータにありません。');
+      if (!sw.children.length) sw.appendChild(el('<p class="empty">この条件の人物はいません。</p>'));
     }
-    svg.on('click', ev => {
-      const [x] = d3.pointer(ev);
-      year = fixYear(yearOfX(x)); store.set('year', year); sel = null; draw(); side();
-    });
+    const span2 = p => span(p.start, p.end);
+    const mctx = document.createElement('canvas').getContext('2d');
+    function textWidth(t, px) { mctx.font = `700 ${px}px ${getComputedStyle(document.body).fontFamily}`; return mctx.measureText(t).width; }
 
     function side() {
       body.innerHTML = '';
@@ -188,7 +178,7 @@ registerTool('ptl', {
       const ps = people();
       const alive = ps.filter(q => year >= q.born && year <= q.died);
       body.appendChild(el(`<div><h2>${esc(region === 'all' ? 'すべての地域' : (REGION[region] || {}).name || '')}の人物</h2>
-        <div class="muted" style="font-size:13px">${ps.length}人。帯をおすと説明。年表の上をおすと、その年に生きていた人が下に出ます。ドラッグで左右に動かし、＋で拡大（Ctrl やシフトを押しながらホイールでも）。</div></div>`));
+        <div class="muted" style="font-size:13px">${ps.length}人。時代ごとに段を分けて、一生の長さを帯で示しています。名前をおすと説明、年表の空いた所をおすと、その年に生きていた人が出ます。</div></div>`));
       body.appendChild(el(`<h3>${esc(yearLabel(year))}に生きていた人物（${alive.length}人）</h3>`));
       const ul = el('<ul class="lst"></ul>');
       alive.forEach(q => {
@@ -200,7 +190,7 @@ registerTool('ptl', {
       body.appendChild(ul);
     }
 
-    requestAnimationFrame(() => { fit(); side(); });
+    requestAnimationFrame(() => { draw(); side(); });
     const ro = new ResizeObserver(() => draw());
     ro.observe(sw);
     return () => ro.disconnect();
