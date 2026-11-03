@@ -187,7 +187,7 @@ const SPEECH = {
   // 歴史の文を、読みまちがえにくい形に
   clean(t) {
     let s = String(t || '');
-    s = s.replace(/前(\d+)年/g, '紀元前$1年').replace(/(?<!紀元)前(\d+)/g, '紀元前$1')
+    s = s.replace(/(紀元)?前\s*(\d+)/g, 'きげんぜん$2').replace(/(きげん)+ぜん/g, 'きげんぜん')
       .replace(/(\d+)〜(\d+)年/g, '$1年から$2年').replace(/〜/g, 'から')
       .replace(/[=＝・]/g, (m, i) => (m === '・' ? '、' : ''))
       .replace(/[「」『』]/g, '').replace(/📍|🔗/g, '').replace(/→/g, '、そして、')
