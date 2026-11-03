@@ -417,6 +417,10 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .chainbtn { margin: 6px 0; }
 .hm-caption { position: absolute; left: 10px; right: 54px; bottom: 10px; z-index: 4; background: rgba(20, 17, 12, .82); color: #f6f1e6; border-radius: 12px; padding: 9px 13px 0; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); box-shadow: 0 4px 18px rgba(0,0,0,.3); max-width: calc(780px * var(--ls, 1)); overflow: hidden; }
 .hm.storying .hm-views { display: none !important; }
+.cap-fig { display: none; float: right; position: relative; margin: 2px 0 4px 10px; width: calc(92px * var(--ls, 1)); }
+.cap-fig img { width: 100%; height: calc(76px * var(--ls, 1)); object-fit: cover; border-radius: 8px; border: 2px solid rgba(255,255,255,.5); cursor: zoom-in; display: block; max-height: none; background: #333; }
+.cap-fig .cap-zoom { position: absolute; right: 3px; bottom: 3px; font-size: 11px; background: rgba(0,0,0,.55); border-radius: 4px; padding: 0 3px; pointer-events: none; }
+@media (max-width: 900px) { .cap-fig { display: block; } }
 .cap-top { display: flex; justify-content: space-between; font-size: calc(11.5px * var(--ls, 1)); color: #d9cfbd; }
 .cap-when { font-weight: 800; color: #ffd76a; display: flex; gap: 10px; flex-wrap: wrap; font-size: calc(13.5px * var(--ls, 1)); }
 .cap-when span:last-child { color: #e8dfcf; font-weight: 500; }

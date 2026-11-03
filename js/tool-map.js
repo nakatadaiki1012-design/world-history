@@ -380,7 +380,10 @@ registerTool('map', {
       const small = store.get('capSmall', false);
       cap.hidden = false;
       cap.className = 'hm-caption' + (small ? ' small' : '');
-      cap.innerHTML = `
+      // 場面の画像（スマホでは右の欄が見えないので、テロップの中に小さく出す。おすと大きく）
+      const im = (IMAGES[s.imageKey || `story:${story.id}:${si + 1}`] || [])[0] || (story.kind === 'person' && story.person ? (IMAGES['person:' + story.person] || [])[0] : null);
+      const capFig = im ? `<figure class="cap-fig fig"><img src="${esc(commonsUrl(im.file, 240))}" data-big="${esc(commonsUrl(im.file, 1400))}" alt="${esc(im.what || '')}" onerror="this.closest('figure').remove()"><figcaption hidden>${esc(im.what || '')}<span class="credit">${im.artist ? esc(im.artist) + '・' : ''}${esc(im.license || '')}</span></figcaption><span class="cap-zoom">🔍</span></figure>` : '';
+      cap.innerHTML = `${capFig}
         <div class="cap-top"><span class="cap-story">${esc(story.title)}</span><span class="cap-n num">${si + 1} / ${n}</span></div>
         <div class="cap-when"><span class="num">${esc(yearLabel(s.year))}</span>${s.date ? ' ' + esc(s.date) : ''}<span>📍 ${esc(s.place || '')}</span></div>
         <div class="cap-title">${esc(s.title)}</div>
@@ -396,7 +399,7 @@ registerTool('map', {
         </div>
         <div class="cap-bar"><i></i></div>`;
       $$('.cap-ctl button', cap).forEach(b => b.addEventListener('click', e => { e.stopPropagation(); storyCtl(b.dataset.a); }));
-      cap.onclick = e => e.stopPropagation();
+      cap.onclick = null;   // 画像をおすと大きく（document の処理に任せる）
       cap.onpointerdown = e => e.stopPropagation();
       // 残り時間のバー（読み上げ中は、読みおわるまで）
       const bar = $('.cap-bar i', cap);
