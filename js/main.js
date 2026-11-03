@@ -1,6 +1,6 @@
 /* 画面の切りかえ（地図と年表／挑戦／授業モード）と、URL の # による直接リンク */
 const GROUPS = [
-  { id: 'see', name: '地図と年表', secs: [['map', '🗺 歴史地図'], ['stories', '▶ 物語でたどる'], ['events', '出来事'], ['chrono', '年表'], ['ptl', '人物年表'], ['econ', '人口と経済'], ['people', '人物図鑑']] },
+  { id: 'see', name: '地図と年表', secs: [['map', '🗺 歴史地図'], ['stories', '▶ 物語でたどる'], ['events', '出来事'], ['chrono', '年表'], ['ptl', '人物年表'], ['econ', '人口と経済'], ['people', '人物図鑑'], ['glossary', '用語集']] },
   { id: 'try', name: '挑戦', secs: [['quiz', 'クイズ']] },
   { id: 'class', name: '授業<span class="lbl">モード</span>', secs: [['lessons/sogo', '歴史総合'], ['lessons/tankyu', '世界史探究']] }
 ];
@@ -17,6 +17,8 @@ function route() {
     params = { year: isFinite(y) ? fixYear(y) : undefined, view: GEO.VIEWS[parts[2]] ? parts[2] : undefined, sel: parts[3] };
   }
   if (id === 'story') params = { story: parts[1], step: parseInt(parts[2], 10) || 1 };
+  if (parts[0] === 'term') { location.replace('#glossary/' + (parts[1] || '')); return; }
+  if (id === 'glossary') params = { term: parts[1] };
   const secKey = id === 'lessons' ? `lessons/${params.course}` : id === 'story' ? 'stories' : id;
   const own = GROUPS.find(g => g.secs.some(s => s[0] === secKey)) || GROUPS[0];
   const nav = $('#grpnav'); nav.innerHTML = '';

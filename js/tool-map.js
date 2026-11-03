@@ -186,7 +186,7 @@ registerTool('map', {
         <h2>${esc(nm ? nm.name : pl.modern)}</h2>
         <div class="muted">今の名前：${esc(pl.modern || '')}</div>
         ${figureHtml('place:' + pl.id)}
-        <p>${esc(pl.text || '')}</p>
+        <p>${linkTerms(pl.text || '')}</p>
         ${pl.fun ? `<div class="ev-fun">💡 <b>ここがおもしろい</b>　${esc(pl.fun)}</div>` : ''}
       </div>`));
       body.appendChild(el('<h3>名前のうつりかわり（おすとその年へ）</h3>'));
@@ -225,8 +225,8 @@ registerTool('map', {
         <h2>${esc(p.full || p.name)}</h2>
         <div class="num" style="font-weight:700">${esc(span(p.start, p.end))}</div>
         ${capitalText(p)}
-        <p>${esc(p.text || '')}</p>
-        ${p.keys && p.keys.length ? `<div class="keys">${p.keys.map(k => `<span>${esc(k)}</span>`).join('')}</div>` : ''}
+        <p>${linkTerms(p.text || '', p.name)}</p>
+        ${p.keys && p.keys.length ? `<div class="keys">${p.keys.map(k => TERM[k] ? `<a class="term" data-term="${esc(k)}" href="#term/${encodeURIComponent(k)}"><span>${esc(k)}</span></a>` : `<span>${esc(k)}</span>`).join('')}</div>` : ''}
         ${p.tags ? `<div class="muted" style="font-size:12.5px">${p.tags.map(t => COURSE[t]).filter(Boolean).join('・')}</div>` : ''}
         ${figureHtml('polity:' + p.id, 2)}
       </div>`));
@@ -270,8 +270,8 @@ registerTool('map', {
         <h2>${esc(p.name)}</h2>
         <div class="muted" style="font-size:13px">${esc(p.kana || '')}</div>
         <div class="num" style="font-weight:700">${esc(lifeSpan(p))}</div>
-        <p>${esc(p.text || '')}</p>
-        ${p.keys && p.keys.length ? `<div class="keys">${p.keys.map(k => `<span>${esc(k)}</span>`).join('')}</div>` : ''}
+        <p>${linkTerms(p.text || '', p.name)}</p>
+        ${p.keys && p.keys.length ? `<div class="keys">${p.keys.map(k => TERM[k] ? `<a class="term" data-term="${esc(k)}" href="#term/${encodeURIComponent(k)}"><span>${esc(k)}</span></a>` : `<span>${esc(k)}</span>`).join('')}</div>` : ''}
         ${ph ? `<div class="credit">肖像：${esc(ph.what || '')}${ph.artist ? '（' + esc(ph.artist) + '）' : ''}・${esc(ph.license || '')}・<a href="${esc(ph.page || '#')}" target="_blank" rel="noopener">ウィキメディア・コモンズ</a></div>` : ''}
       </div>`));
       if (IMAGES['person:' + p.id]) body.appendChild(el(`<div>${figureHtml('person:' + p.id, 2)}</div>`));
@@ -316,7 +316,7 @@ registerTool('map', {
         <div class="muted" style="font-size:13px"><span class="sw" style="background:${KIND_COLOR[e.kind] || '#555'};transform:rotate(45deg);border-radius:2px"></span> ${esc(KIND[e.kind] || '')}・${esc(reg ? reg.name : '')}</div>
         <h2>${esc(e.title)}</h2>
         <div class="num" style="font-weight:700">${esc(yearLabel(e.year))}${e.end && e.end !== e.year ? '〜' + esc(yearLabel(e.end)) : ''}　<span style="font-family:var(--font-body);font-weight:500">${esc(e.place || '')}</span></div>
-        <p>${esc(e.text || '')}</p>
+        <p>${linkTerms(e.text || '', e.title)}</p>
       </div>`));
       const idx = EVENT_IDX[e.title];
       body.appendChild(el(`<div>${figureHtml('event:' + e.title)}</div>`));
@@ -352,6 +352,7 @@ registerTool('map', {
     function endStory() {
       clearTimeout(stTimer); SPEECH.stop(); story = null; playing = false;
       map.root.classList.remove('storying'); map.caption.hidden = true;
+      $$('.story-img, .story-img-show', map.root).forEach(x => x.remove());
       map.setStory(null); syncHash(); renderSide();
     }
     // 場面の読み上げ用の文
@@ -383,6 +384,20 @@ registerTool('map', {
       // 場面の画像（スマホでは右の欄が見えないので、テロップの中に小さく出す。おすと大きく）
       const im = (IMAGES[s.imageKey || `story:${story.id}:${si + 1}`] || [])[0] || (story.kind === 'person' && story.person ? (IMAGES['person:' + story.person] || [])[0] : null);
       const capFig = im ? `<figure class="cap-fig fig"><img src="${esc(commonsUrl(im.file, 240))}" data-big="${esc(commonsUrl(im.file, 1400))}" alt="${esc(im.what || '')}" onerror="this.closest('figure').remove()"><figcaption hidden>${esc(im.what || '')}<span class="credit">${im.artist ? esc(im.artist) + '・' : ''}${esc(im.license || '')}</span></figcaption><span class="cap-zoom">🔍</span></figure>` : '';
+      // パソコンでは、地図の右下（テロップのとなり）にも画像を出す（✕でかくせる）
+      $$('.story-img, .story-img-show', map.root).forEach(x => x.remove());
+      map.root.classList.toggle('has-simg', !!im && !store.get('storyImgHide', false));
+      if (im) {
+        if (!store.get('storyImgHide', false)) {
+          const box = el(`<figure class="story-img fig"><img src="${esc(commonsUrl(im.file, 480))}" data-big="${esc(commonsUrl(im.file, 1400))}" alt="${esc(im.what || '')}" onerror="this.closest('figure').remove()"><figcaption>${esc(im.what || '')}<span class="credit" hidden>${im.artist ? esc(im.artist) + '・' : ''}${esc(im.license || '')}</span></figcaption><button type="button" class="x" aria-label="画像をかくす">✕</button></figure>`);
+          $('.x', box).addEventListener('click', e => { e.stopPropagation(); store.set('storyImgHide', true); renderCaption(); });
+          $('.hm-stage', map.root).appendChild(box);
+        } else {
+          const b = el('<button type="button" class="chip story-img-show">🖼 画像</button>');
+          b.addEventListener('click', () => { store.set('storyImgHide', false); renderCaption(); });
+          $('.hm-stage', map.root).appendChild(b);
+        }
+      }
       cap.innerHTML = `${capFig}
         <div class="cap-top"><span class="cap-story">${esc(story.title)}</span><span class="cap-n num">${si + 1} / ${n}</span></div>
         <div class="cap-when"><span class="num">${esc(yearLabel(s.year))}</span>${s.date ? ' ' + esc(s.date) : ''}<span>📍 ${esc(s.place || '')}</span></div>
@@ -395,6 +410,7 @@ registerTool('map', {
           <button type="button" data-a="tts" class="${SPEECH.on ? 'on' : ''}" ${SPEECH.ok ? '' : 'disabled'} aria-label="音声で読み上げ">${SPEECH.on ? '🔊' : '🔈'}<span class="lbl2"> 読み上げ</span></button>
           ${s.talk ? `<button type="button" data-a="talk" class="${talkMode ? 'on' : ''}" aria-label="語り口の切りかえ">${talkMode ? '🎙 語り' : '📄 要点'}</button>` : ''}
           <button type="button" data-a="size" aria-label="テロップの大きさ">${small ? '▴' : '▾'}</button>
+          <button type="button" data-a="list" aria-label="物語の一覧へ">☰<span class="lbl2"> 一覧</span></button>
           <button type="button" data-a="end" aria-label="物語をおわる">✕</button>
         </div>
         <div class="cap-bar"><i></i></div>`;
@@ -411,6 +427,7 @@ registerTool('map', {
       if (a === 'prev') goStep(si - 1);
       else if (a === 'next') goStep(si + 1);
       else if (a === 'end') endStory();
+      else if (a === 'list') { endStory(); location.hash = '#stories'; }
       else if (a === 'size') { store.set('capSmall', !store.get('capSmall', false)); renderCaption(); }
       else if (a === 'talk') { talkMode = !talkMode; store.set('talkMode', talkMode); renderSideNow(); if (SPEECH.on) { if (playing) schedule(); else speakStep(story.steps[si]); } }
       else if (a === 'tts') {
@@ -462,7 +479,7 @@ registerTool('map', {
     function storyPanel() {
       const s = story.steps[si];
       const box = el(`<div class="story">
-        <button type="button" class="backlink">← 物語をおわる</button>
+        <button type="button" class="backlink">← 物語をおわる</button><a class="backlink st-back" href="#stories">☰ 物語の一覧へ</a>
         <div class="muted" style="font-size:12.5px">${esc(story.period || '')}</div>
         <h2 style="margin-top:0">${esc(story.title)}</h2>
         <div class="st-dots"></div>
@@ -470,8 +487,8 @@ registerTool('map', {
           <div class="st-when"><span class="num">${esc(yearLabel(s.year))}</span>${s.date ? ' ' + esc(s.date) : ''}<span class="st-place">📍 ${esc(s.place || '')}</span></div>
           <h3 class="st-title">${si + 1}．${esc(s.title)}</h3>
           ${figureHtml(s.imageKey || `story:${story.id}:${si + 1}`)}
-          <p>${furi(s.text || '')}</p>
-          ${s.talk ? `<div class="st-talk"><b>🎙 語り</b>${furi(s.talk)}</div>` : ''}
+          <p>${linkTerms(s.text || '')}</p>
+          ${s.talk ? `<div class="st-talk"><b>🎙 語り</b>${linkTerms(s.talk)}</div>` : ''}
           ${s.why ? `<div class="st-why">🔗 ${esc(s.why)}</div>` : ''}
           <div class="st-people"></div>
         </div>

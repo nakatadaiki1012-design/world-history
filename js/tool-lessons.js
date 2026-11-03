@@ -45,9 +45,9 @@ function lessonPage(main, ls, i, done) {
     <h2>${esc(l.title)}</h2>
     <div class="q">問い：${esc(l.question || '')}</div>
     <div class="mapbtns"></div>
-    ${(l.body || []).map((b, k) => `<h3>${esc(b.h)}</h3><p>${esc(b.p)}</p>${k === 0 ? figureHtml('lesson:' + l.id, 1) : ''}`).join('')}
+    ${(l.body || []).map((b, k) => `<h3>${esc(b.h)}</h3><p>${linkTerms(b.p)}</p>${k === 0 ? figureHtml('lesson:' + l.id, 1) : ''}`).join('')}
     ${(IMAGES['lesson:' + l.id] || []).length > 1 ? `<h3>資料</h3><div class="figs">${figureHtml('lesson:' + l.id, 4).split('</figure>').slice(1).join('</figure>')}</div>` : ''}
-    ${l.terms && l.terms.length ? `<h3>重要語句</h3><div class="keys">${l.terms.map(t => `<span>${esc(t)}</span>`).join('')}</div>` : ''}
+    ${l.terms && l.terms.length ? `<h3>重要語句</h3><div class="keys">${l.terms.map(t => TERM[t] ? `<a class="term" data-term="${esc(t)}" href="#term/${encodeURIComponent(t)}"><span>${esc(t)}</span></a>` : `<span>${esc(t)}</span>`).join('')}</div>` : ''}
     ${l.think ? `<div class="think"><b>考えよう</b><br>${esc(l.think)}</div>` : ''}
     <h3>確認問題</h3><div class="lqs"></div>
     <div class="lesson-nav"></div>`;

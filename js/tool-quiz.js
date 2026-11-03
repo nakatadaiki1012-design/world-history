@@ -5,10 +5,20 @@ const QTYPES = [
   { id: 'same', name: '同じ時代' },
   { id: 'order', name: '出来事の順番' },
   { id: 'who', name: '人物あて' },
-  { id: 'lesson', name: '授業の確認問題' }
+  { id: 'lesson', name: '授業の確認問題' },
+  { id: 'termdef', name: '用語：説明→用語' },
+  { id: 'defterm', name: '用語：用語→説明' },
+  { id: 'termera', name: '用語：いつのこと？' }
 ];
 
 function quizMaker(course) {
+  // 用語のえらび方：科目で絞り、★の多い語を多めに
+  const termPool = () => (typeof GLOSSARY === 'undefined' ? [] : GLOSSARY).filter(g => g.def && g.def.length > 20 && (!course || !(g.course || []).length || g.course.includes(course)));
+  const termPick = () => { const P = termPool(); if (!P.length) return null; const w = P.map(g => (g.rank || 1) * (g.rank || 1)); let r = Math.random() * w.reduce((a, b) => a + b, 0); for (let i = 0; i < P.length; i++) { r -= w[i]; if (r <= 0) return P[i]; } return P[0]; };
+  // まちがいの選択肢：同じ分類・同じ地域・近い時代の語から（見分けがいのあるものに）
+  const termOthers = (g, n) => { const P = termPool().filter(x => x.term !== g.term && !g.def.includes(x.term) && !x.def.includes(g.term));
+    const near = P.filter(x => x.cat === g.cat && (x.region === g.region || (x.year != null && g.year != null && Math.abs(x.year - g.year) < 400)));
+    return shuffle(near.length >= n ? near : P).slice(0, n); };
   // 歴史総合は 18 世紀以降が中心
   const inCourse = x => !course || (x.tags || []).includes(course) || (course === 'sogo' && (x.start || x.year || x.born || 0) >= 1700);
   const pols = POLITIES.filter(p => (p.rank || 2) <= 2 && inCourse(p));
@@ -63,6 +73,29 @@ function quizMaker(course) {
       const c = shuffle([p, ...others]);
       return { q: `次の説明にあてはまる人物はだれ？<div class="qres" style="margin-top:8px;font-weight:500">${esc(text)}</div>`, c: c.map(x => x.name), a: c.indexOf(p), exp: `${p.name}（${lifeSpan(p)}、${p.role || ''}）。`, person: p.id };
     },
+    // 用語集から：説明を読んで用語を当てる（テストに出やすい語ほど多く出す）
+    termdef() {
+      const g = termPick(); if (!g) return null;
+      const others = termOthers(g, 3); if (others.length < 3) return null;
+      const c = shuffle([g, ...others]);
+      let d = g.def; [g.term, ...(g.term.split(/[=＝・]/).filter(x => x.length >= 2))].forEach(n => { d = d.split(n).join('〔　　〕'); });
+      return { q: `次の説明にあてはまる用語はどれ？<div class="qres" style="margin-top:8px;font-weight:500">${esc(d)}</div>`, c: c.map(x => x.term), a: c.indexOf(g), exp: `${g.term}（${g.yomi || ''}）：${g.def}`, term: g.term };
+    },
+    defterm() {
+      const g = termPick(); if (!g) return null;
+      const others = termOthers(g, 3); if (others.length < 3) return null;
+      const c = shuffle([g, ...others]);
+      const hide = (x) => { let d = x.def; [x.term].forEach(n => { d = d.split(n).join('これ'); }); return d.length > 70 ? d.slice(0, 68) + '…' : d; };
+      return { q: `「${esc(g.term)}」の説明として正しいものはどれ？`, c: c.map(hide), a: c.indexOf(g), exp: `${g.term}：${g.def}`, term: g.term };
+    },
+    termera() {
+      const pool = termPool().filter(g => g.year != null);
+      const g = pick(pool); if (!g) return null;
+      const bins = ERA_BINS.map(b => b[2]);
+      const right = eraOf(g.year);
+      const c = shuffle([right, ...shuffle(bins.filter(b => b !== right)).slice(0, 3)]);
+      return { q: `「${esc(g.term)}」がいちばん関係する時代はどれ？`, c, a: c.indexOf(right), exp: `${g.term}（${yearLabel(g.year)}）：${g.def}`, term: g.term };
+    },
     lesson() {
       const ls = LESSONS.filter(l => !course || l.course === course).filter(l => l.quiz && l.quiz.length);
       const l = pick(ls); if (!l) return null;
@@ -79,7 +112,7 @@ registerTool('quiz', {
   render(main) {
     const box = el('<div class="quiz"></div>');
     main.appendChild(box);
-    let cfg = Object.assign({ course: '', types: ['map', 'capital', 'same', 'order', 'who', 'lesson'], n: 10 }, store.get('quizCfg', {}));
+    let cfg = Object.assign({ course: '', types: ['map', 'capital', 'same', 'order', 'who', 'lesson', 'termdef', 'defterm'], n: 10 }, store.get('quizCfg', {}));
     let mini = null;
     function setup() {
       if (mini) { mini.destroy(); mini = null; }
@@ -148,6 +181,7 @@ registerTool('quiz', {
             const links = el('<div class="keys" style="margin-top:8px"></div>');
             if (q.map) links.appendChild(el(`<a class="chip" href="${mapHash(q.map.year, q.map.view, 's:' + q.map.id)}">🗺 地図でくわしく</a>`));
             if (q.person) links.appendChild(el(`<a class="chip" href="${mapHash(Math.round((PERSON[q.person].born + PERSON[q.person].died) / 2), REGION_VIEW[PERSON[q.person].region], 'p:' + q.person)}">🗺 足あとを見る</a>`));
+            if (q.term && typeof TERM !== 'undefined' && TERM[q.term]) { const t = el(`<a class="chip term" data-term="${esc(q.term)}" href="#term/${encodeURIComponent(q.term)}">📘 用語「${esc(q.term)}」を見る</a>`); links.appendChild(t); }
             if (q.lesson) links.appendChild(el(`<a class="chip" href="#lessons/${q.lesson.course}/${q.lesson.id}">📖 授業「${esc(q.lesson.title)}」</a>`));
             if (links.children.length) res.appendChild(links);
             $('.qnext', card).appendChild(res);
