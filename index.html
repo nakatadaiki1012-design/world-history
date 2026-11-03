@@ -140,6 +140,25 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 @keyframes stpulse { from { transform: scale(.6); opacity: 1; } to { transform: scale(2.6); opacity: 0; } }
 .st-lab { font-size: calc(12px * var(--ls, 1)); font-weight: 700; fill: var(--ink); stroke: var(--halo); stroke-width: 3.5px; paint-order: stroke; pointer-events: none; }
 .st-lab.main { font-size: calc(14px * var(--ls, 1)); font-weight: 800; }
+.tr-mtn { fill: #8a6d4a; fill-opacity: .16; stroke: none; }
+.tr-des { fill: #e3c27a; fill-opacity: .28; stroke: none; }
+.tr-pla { fill: #a88d63; fill-opacity: .09; stroke: none; }
+.tr-tun { fill: #b9c7c9; fill-opacity: .18; stroke: none; }
+.tr-lake { fill: var(--sea); stroke: #7fa6c0; stroke-width: .5; vector-effect: non-scaling-stroke; }
+.tr-riv { fill: none; stroke: #6f9fc4; stroke-linecap: round; vector-effect: non-scaling-stroke; opacity: .85; pointer-events: none; }
+:root[data-theme="dark"] .tr-riv { stroke: #4f7fa4; }
+.tl-mtn text, .tl-pla text, .tl-tun text { font-size: calc(11.5px * var(--ls, 1)); fill: #7a5c38; font-style: italic; letter-spacing: .25em; stroke: var(--halo); stroke-width: 2.5px; paint-order: stroke; }
+.tl-des text { font-size: calc(11.5px * var(--ls, 1)); fill: #9a7428; font-style: italic; letter-spacing: .25em; stroke: var(--halo); stroke-width: 2.5px; paint-order: stroke; }
+.tl-riv text { font-size: calc(11px * var(--ls, 1)); fill: #3f78a6; font-style: italic; stroke: var(--halo); stroke-width: 2.5px; paint-order: stroke; }
+.tl-city text { font-size: calc(10.5px * var(--ls, 1)); fill: var(--muted); stroke: var(--halo); stroke-width: 2.5px; paint-order: stroke; }
+.tl-city circle { fill: var(--muted); }
+.hm-inset { position: absolute; right: 52px; top: 8px; z-index: 3; border: 2px solid var(--panel); border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,.28); cursor: zoom-out; line-height: 0; }
+.hm-inset .in-sea { fill: var(--sea); }
+.hm-inset .in-land { fill: var(--land); stroke: var(--land-line); stroke-width: .4; }
+.hm-inset .in-pol { fill-opacity: .55; stroke: none; }
+.hm-inset .in-box { fill: rgba(200, 40, 40, .12); stroke: #c62828; stroke-width: 1.6; }
+.hm-inset .in-dot { fill: #c62828; stroke: #fff; stroke-width: 1.2; }
+.hm-inset text { font-size: 9px; font-weight: 700; text-anchor: middle; fill: var(--ink); stroke: var(--halo); stroke-width: 2px; paint-order: stroke; }
 .hm-edge { fill: none; stroke-width: .9; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; pointer-events: none; opacity: .55; }
 .hm-lab { font-family: var(--font-display); font-weight: 800; fill: var(--label); stroke: var(--halo); stroke-width: 3.5px; paint-order: stroke; text-anchor: middle; dominant-baseline: central; pointer-events: none; letter-spacing: .04em; }
 .hm-cap rect { fill: var(--panel); stroke: var(--ink); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
@@ -409,6 +428,7 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 <script src="js/data/stories.js"></script>
 <script src="js/data/images.js"></script>
 <script src="js/data/images-more.js"></script>
+<script src="js/data/terrain.js"></script>
 <script src="js/data/shapes-precise.js"></script>
 <script src="js/geo.js"></script>
 <script src="js/core.js"></script>

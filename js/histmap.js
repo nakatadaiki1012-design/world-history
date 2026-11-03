@@ -5,7 +5,7 @@ function createHistMap(host, opts = {}) {
   const st = {
     year: fixYear(opts.year != null ? opts.year : 750),
     view: GEO.VIEWS[opts.view] ? opts.view : 'world',
-    layers: Object.assign({ cap: true, people: true, events: true, modern: false, sphere: true }, store.get('layers', {}), opts.layers || {}),
+    layers: Object.assign({ cap: true, people: true, events: true, modern: false, sphere: true, terrain: true, cities: true }, store.get('layers', {}), opts.layers || {}),
     sel: null,          // { type: 'polity' | 'person' | 'event', id }
     playing: null, speed: 1, w: 0, h: 0, k: 1, t: d3.zoomIdentity
   };
@@ -27,6 +27,8 @@ function createHistMap(host, opts = {}) {
           <label><input type="checkbox" data-l="events"> ◆ 出来事</label>
           <label><input type="checkbox" data-l="sphere"> ▨ 勢力圏（斜線）</label>
           <label><input type="checkbox" data-l="modern"> ┄ 現在の国境</label>
+          <label><input type="checkbox" data-l="terrain"> ⛰ 地形（山脈・砂漠・川・湖）</label>
+          <label><input type="checkbox" data-l="cities"> ・ 今の町の名前（拡大したとき）</label>
         </div>
         <div class="hm-set-g"><b>画面</b>
           <label><input type="checkbox" data-u="views"> 地域のボタン</label>
@@ -43,6 +45,7 @@ function createHistMap(host, opts = {}) {
       </div>
       <div class="hm-views"></div>
       <div class="hm-caption" hidden></div>
+      <div class="hm-inset" hidden title="おすと引きの地図にもどる"><svg></svg></div>
       <div class="hm-tip" hidden></div>
     </div>
     ${opts.bar === false ? '' : `<div class="hm-bar">
@@ -61,11 +64,14 @@ function createHistMap(host, opts = {}) {
   const svg = d3.select(svgEl);
   const gZoom = svg.append('g');
   const gBase = gZoom.append('g');
+  const gTerr = gZoom.append('g');   // 山脈・砂漠などの地形
   const gSph = gZoom.append('g');
   const gPol = gZoom.append('g');
   const gModern = gZoom.append('g');
   const gEdge = gZoom.append('g');
+  const gWater = gZoom.append('g');  // 川と湖
   const gOver = svg.append('g');   // 名前・点（拡大しても大きさが変わらない）
+  const gTlab = gOver.append('g');   // 地形・町の名前（いちばん下）
   const gStory = gOver.append('g');
   const gTrail = gOver.append('g'), gLab = gOver.append('g'), gCap = gOver.append('g'), gEv = gOver.append('g'), gPeo = gOver.append('g');
   const uid = 'hm' + Math.random().toString(36).slice(2, 8);
@@ -101,7 +107,9 @@ function createHistMap(host, opts = {}) {
     // 都市の大きさまで拡大したら、国の色をうすくして地形の線を見やすく
     gPol.style('opacity', st.k > 25 ? 0.22 : st.k > 12 ? 0.6 : null); gEdge.style('opacity', st.k > 25 ? 0.3 : null);
     gZoom.attr('transform', ev.transform);
+    updateTerrain();
     placeOverlay();
+    drawInset();
   });
   svg.call(zoom).on('dblclick.zoom', null);
   $$('.hm-tools button[data-z]', root).forEach(b => b.addEventListener('click', () => {
@@ -141,7 +149,96 @@ function createHistMap(host, opts = {}) {
     gSph.attr('clip-path', `url(#${uid}land)`);
     gModern.selectAll('*').remove();
     gModern.append('path').attr('class', 'hm-modern').attr('d', path(topojson.mesh(window.WORLD_TOPO, window.WORLD_TOPO.objects.countries, (a, b) => a !== b)));
+    buildTerrain();
     renderViews();
+  }
+
+  // --- 地形（山脈・砂漠・高原）と川・湖 ---
+  let terr = null;
+  function terrainData() {
+    if (terr || !window.TERRAIN) return terr;
+    const t = window.TERRAIN;
+    terr = {
+      regions: topojson.feature(t, t.objects.regions).features,
+      rivers: topojson.feature(t, t.objects.rivers_ja).features,
+      lakes: topojson.feature(t, t.objects.lakes).features
+    };
+    return terr;
+  }
+  const TCLS = { 'Range/mtn': 'mtn', Desert: 'des', Plateau: 'pla', Tundra: 'tun', Foothills: 'mtn' };
+  function buildTerrain() {
+    gTerr.selectAll('*').remove(); gWater.selectAll('*').remove();
+    const T = terrainData(); if (!T) return;
+    gTerr.attr('clip-path', `url(#${uid}land)`);
+    gTerr.selectAll('path').data(T.regions.filter(f => TCLS[f.properties.c])).join('path')
+      .attr('class', f => 'tr-' + TCLS[f.properties.c]).attr('d', path);
+    gWater.selectAll('path.tr-lake').data(T.lakes).join('path').attr('class', 'tr-lake').attr('d', path);
+    gWater.selectAll('path.tr-riv').data(T.rivers).join('path').attr('class', 'tr-riv').attr('d', path)
+      .attr('stroke-width', f => Math.max(0.5, 2.2 - f.properties.r * 0.25));
+    // 名前の位置（いちばん長い線のまん中・形のまん中）
+    T.rivers.forEach(f => {
+      if (!f.properties.n) return;
+      const ls = f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      const l = ls.reduce((a, b) => (b.length > a.length ? b : a), []);
+      f.lab = l[Math.floor(l.length / 2)];
+    });
+    T.regions.forEach(f => { f.lab = d3.geoCentroid(f); });
+    updateTerrain();
+  }
+  function updateTerrain() {
+    const on = st.layers.terrain;
+    gTerr.style('display', on ? null : 'none');
+    gWater.style('display', on ? null : 'none');
+    if (!on) return;
+    const k = st.k;
+    // 拡大するほど、小さい川も出す
+    const maxR = k < 1.5 ? 3 : k < 3 ? 4 : k < 6 ? 5 : k < 12 ? 6 : 7;
+    gWater.selectAll('path.tr-riv').style('display', f => f.properties.r <= maxR ? null : 'none');
+    gTerr.style('opacity', k > 25 ? 1 : null);
+  }
+
+  // --- 引きの地図（強く拡大したときだけ、右上に小さく） ---
+  const inset = $('.hm-inset', root), isvg = d3.select($('svg', inset));
+  inset.addEventListener('click', e => { e.stopPropagation(); svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity); });
+  inset.addEventListener('pointerdown', e => e.stopPropagation());
+  let insetKey = '';
+  function drawInset() {
+    if (opts.mini || !pr) return;
+    const show = st.k >= 3.5;
+    inset.hidden = !show;
+    if (!show) return;
+    const IW = Math.round(150 * (st.ls || 1)), IH = Math.round(IW * 0.66);
+    // 拡大のしかたに合わせて、引きの地図の範囲を決める（とても強い拡大なら地域、そうでなければ今の範囲全体）
+    const c = pr.invert(st.t.invert([st.w / 2, st.h / 2]));
+    if (!c) return;
+    const spanNow = (() => { const a = pr.invert(st.t.invert([0, st.h / 2])), b = pr.invert(st.t.invert([st.w, st.h / 2])); return a && b ? Math.abs(b[0] - a[0]) || 1 : 10; })();
+    const ispan = clamp(spanNow * 9, 16, 80);
+    const key = [Math.round(c[0] / (ispan / 6)), Math.round(c[1] / (ispan / 6)), Math.round(ispan), IW, st.year].join(',');
+    const ip = d3.geoAzimuthalEqualArea().rotate([-c[0], -c[1]]).clipAngle(90);
+    ip.fitExtent([[2, 2], [IW - 2, IH - 2]], { type: 'MultiPoint', coordinates: [[c[0] - ispan / 2, c[1]], [c[0] + ispan / 2, c[1]], [c[0], c[1] - ispan / 3], [c[0], c[1] + ispan / 3]] });
+    const ipath = d3.geoPath(ip);
+    isvg.attr('width', IW).attr('height', IH).attr('viewBox', `0 0 ${IW} ${IH}`);
+    if (key !== insetKey) {
+      insetKey = key;
+      isvg.selectAll('*').remove();
+      isvg.append('rect').attr('class', 'in-sea').attr('width', IW).attr('height', IH);
+      isvg.append('path').attr('class', 'in-land').attr('d', ipath(GEO.world().land));
+      isvg.append('g').selectAll('path').data(feats).join('path').attr('class', 'in-pol').attr('d', ipath).attr('fill', f => f.properties.p.color || '#888');
+      isvg.append('g').attr('class', 'in-labs');
+      isvg.append('path').attr('class', 'in-box');
+      isvg.append('circle').attr('class', 'in-dot').attr('r', 3.5);
+    }
+    // いま見ている範囲の四角
+    const pts = [[0, 0], [st.w / 2, 0], [st.w, 0], [st.w, st.h / 2], [st.w, st.h], [st.w / 2, st.h], [0, st.h], [0, st.h / 2]]
+      .map(q => pr.invert(st.t.invert(q))).filter(Boolean).map(ll => ip(ll)).filter(Boolean);
+    const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
+    const small = !pts.length || (Math.max(...xs) - Math.min(...xs) < 7 && Math.max(...ys) - Math.min(...ys) < 7);
+    isvg.select('.in-box').attr('d', pts.length > 2 && !small ? d3.line()(pts) + 'Z' : null);
+    const cc = ip(c);
+    isvg.select('.in-dot').attr('cx', cc ? cc[0] : -10).attr('cy', cc ? cc[1] : -10).style('display', small ? null : 'none');
+    // 大きな国の名前を少しだけ
+    const labs = feats.filter(f => (f.properties.p.rank || 2) <= 2).sort((a, b) => (a.properties.p.rank || 2) - (b.properties.p.rank || 2) || d3.geoArea(b) - d3.geoArea(a)).map(f => { const q = ip(d3.geoCentroid(f)); return q && q[0] > 8 && q[0] < IW - 8 && q[1] > 6 && q[1] < IH - 4 ? { n: f.properties.p.name, q } : null; }).filter(Boolean).slice(0, 4);
+    isvg.select('.in-labs').selectAll('text').data(labs).join('text').attr('x', d => d.q[0]).attr('y', d => d.q[1]).text(d => d.n);
   }
 
   // --- 名前の位置（いちばん大きい部分のまん中） ---
@@ -223,6 +320,7 @@ function createHistMap(host, opts = {}) {
     shownEvents.forEach(x => { const end = x.e.end || x.e.year; x.age = y >= x.e.year && y <= end ? 0 : Math.max(0, y - end); x.win = win; });
 
     placeOverlay();
+    drawInset();
     // 年の表示
     $('.hm-yearbig', root).innerHTML = `${esc(yearLabel(y))}<small>${esc(eraName(y))}</small>`;
     if (opts.bar !== false) {
@@ -260,6 +358,8 @@ function createHistMap(host, opts = {}) {
     const isSelP = id => sel && sel.type === 'person' && sel.id === id;
     // 左上の大きな年と、右上のボタンの場所はあけておく
     boxes.push([0, 0, 190, 70], [W - 52, 0, W, 150], [0, H - 40, W, H]);
+    // 引きの地図が出ているときは、その下に名前を置かない
+    if (st.k >= 3.5) { const IW = Math.round(150 * (st.ls || 1)); boxes.push([W - 56 - IW, 0, W, IW * 0.66 + 14]); }
 
     // 物語の地点・進路（名前の場所取りより先に）
     const storyLabels = drawStory(boxes);
@@ -356,7 +456,39 @@ function createHistMap(host, opts = {}) {
       jobs.push({ pri: s ? 0 : 7, sub: x.age, run: () => { x.lab = tryPlace(side(x.sx, x.sy, 9, w, h, s)); } });
     });
     storyLabels.forEach(m => jobs.push({ pri: m.main ? 0 : 1, sub: 0, run: () => { m.lab = tryPlace(side(m.x, m.y, m.main ? 13 : 7, textW(m.name, (m.main ? 14 : 12) * (st.ls || 1), false), (m.main ? 17 : 14) * (st.ls || 1), m.main)); } }));
+    // 地形の名前・川の名前・今の町（いちばん後回し。あいている所だけ）
+    const tlabs = [];
+    const T = terrainData();
+    if (T && st.layers.terrain && !opts.mini) {
+      const k = st.k, S = st.ls || 1;
+      T.regions.forEach(f => {
+        const p = f.properties; if (!TCLS[p.c] || !p.n) return;
+        if (p.r > (k < 2 ? 2 : k < 4 ? 3 : k < 8 ? 4 : 5)) return;
+        const q = pr(f.lab); if (!q) return; const [x, y] = t.apply(q); if (!inView(x, y)) return;
+        const w = textW(p.n, 11.5 * S, false) * 1.15, h = 13 * S;
+        jobs.push({ pri: 8.2, sub: p.r, run: () => { const b = [x - w / 2, y - h / 2, x + w / 2, y + h / 2]; if (!hit(b)) { boxes.push(b); tlabs.push({ cls: 'tl-' + TCLS[p.c], n: p.n, x, y, a: 'middle' }); } } });
+      });
+      if (k >= 2.5) T.rivers.forEach(f => {
+        const p = f.properties; if (!p.n || !f.lab || p.r > (k < 5 ? 3 : k < 10 ? 5 : 7)) return;
+        const q = pr(f.lab); if (!q) return; const [x, y] = t.apply(q); if (!inView(x, y)) return;
+        const w = textW(p.n, 11 * S, false), h = 13 * S;
+        jobs.push({ pri: 8.5, sub: p.r, run: () => { const b = [x + 3, y - h, x + 3 + w, y]; if (!hit(b)) { boxes.push(b); tlabs.push({ cls: 'tl-riv', n: p.n, x: x + 3, y: y - h / 2, a: 'start' }); } } });
+      });
+    }
+    if (window.CITIES && st.layers.cities && !opts.mini && st.k >= 3) {
+      const k = st.k, S = st.ls || 1, maxR = k < 6 ? 2 : k < 12 ? 3 : k < 30 ? 5 : 6;
+      window.CITIES.forEach(([n, lon, lat, r]) => {
+        if (r > maxR) return;
+        const q = pr([lon, lat]); if (!q) return; const [x, y] = t.apply(q); if (!inView(x, y)) return;
+        const w = textW(n, 10.5 * S, false), h = 12 * S;
+        jobs.push({ pri: 7.6, sub: r, run: () => { const b = [x - 3, y - h / 2, x + 5 + w, y + h / 2]; if (!hit(b)) { boxes.push(b); tlabs.push({ cls: 'tl-city', n, x, y, a: 'start', dot: true }); } } });
+      });
+    }
     jobs.sort((a, b) => a.pri - b.pri || a.sub - b.sub).forEach(j => j.run());
+    gTlab.selectAll('g').data(tlabs).join(en => { const g = en.append('g'); g.append('circle'); g.append('text'); return g; })
+      .attr('class', d => d.cls).attr('transform', d => `translate(${d.x},${d.y})`)
+      .call(g => g.select('circle').attr('r', d => (d.dot ? 1.8 : 0)))
+      .call(g => g.select('text').attr('x', d => (d.dot ? 4 : 0)).attr('text-anchor', d => d.a).attr('dominant-baseline', 'central').text(d => d.n));
     gStory.selectAll('text.st-lab').data(storyLabels.filter(m => m.lab)).join('text').attr('class', d => 'st-lab' + (d.main ? ' main' : ''))
       .attr('dominant-baseline', 'central').attr('x', d => d.x + d.lab.dx).attr('y', d => d.y + d.lab.dy).attr('text-anchor', d => d.lab.a).text(d => d.name);
 
