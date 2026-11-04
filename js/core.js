@@ -68,7 +68,12 @@ const EVENT_FUN = {};
 const ERA_BINS = [[-9999, 500, '古代'], [500, 1500, '中世'], [1500, 1800, '近世'], [1800, 1914, '近代'], [1914, 9999, '現代']];
 const eraOf = y => (ERA_BINS.find(b => y >= b[0] && y < b[1]) || ERA_BINS[0])[2];
 const STORY = {};
-const STORY_KIND = { event: 'できごと', person: '人物', theme: 'テーマ' };
+const STORY_KIND = { event: 'できごと', person: '人物', theme: 'テーマ', term: '用語' };
+// 用語の物語の分類（kind: 'term' の tcat）
+const TERM_STORY_CAT = ['法律・制度', '土地制度', '条約・宣言', '書物', '建物・遺跡', '出来事', '経済・社会', '思想・宗教'];
+const TERM_STORY_ICON = { '法律・制度': '⚖', '土地制度': '🌾', '条約・宣言': '📜', '書物': '📖', '建物・遺跡': '🏛', '出来事': '⚡', '経済・社会': '💰', '思想・宗教': '💡' };
+// 用語 → その用語の物語
+const termStoryOf = t => STORIES.find(s => s.kind === 'term' && s.term === t);
 const THEME_NAME = { land: '土地制度', religion: '宗教', war: '戦い方', trade: '交易と貨幣', state: '国家と官僚', science: '文字・科学', society: '社会' };
 const storyKind = s => s.kind || 'event';
 const lifeStoryOf = pid => STORIES.find(s => s.kind === 'person' && s.person === pid);

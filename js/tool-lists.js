@@ -2,16 +2,16 @@
 
 // 一覧の上の「しぼりこみ」。物語と出来事で共通
 function listFilters(box, key, opts, onChange) {
-  const st = Object.assign({ region: '', era: '', course: '', kind: '', sort: 'year', q: '', skind: '', theme: '' }, store.get(key, {}));
+  const st = Object.assign({ region: '', era: '', course: '', kind: '', sort: 'year', q: '', skind: '', theme: '', tcat: '' }, store.get(key, {}));
   const save = () => { store.set(key, st); onChange(st); };
   box.classList.add('lf2');
   box.innerHTML = '';
   // 物語の種類だけはよく使うので、タブのように上に並べる
   if (opts.storyKinds) {
     const tabs = el('<div class="lf-tabs"></div>');
-    [['', 'すべて'], ['event', '🗺 できごと'], ['person', '👤 人物'], ['theme', '🧭 テーマ']].forEach(([v, n]) => {
+    [['', 'すべて'], ['event', '🗺 できごと'], ['person', '👤 人物'], ['theme', '🧭 テーマ'], ['term', '📘 用語']].forEach(([v, n]) => {
       const b = el(`<button type="button" aria-pressed="${st.skind === v}">${n}</button>`);
-      b.addEventListener('click', () => { st.skind = v; if (v !== 'theme') st.theme = ''; store.set(key, st); listFilters(box, key, opts, onChange); });
+      b.addEventListener('click', () => { st.skind = v; if (v !== 'theme') st.theme = ''; if (v !== 'term') st.tcat = ''; store.set(key, st); listFilters(box, key, opts, onChange); });
       tabs.appendChild(b);
     });
     box.appendChild(tabs);
@@ -31,6 +31,7 @@ function listFilters(box, key, opts, onChange) {
     s.addEventListener('change', () => { st[field] = s.value; s.classList.toggle('on', !!s.value && field !== 'sort'); save(); });
     bar.appendChild(s);
   };
+  if (opts.storyKinds && st.skind === 'term') sel('tcat', [['', '分類：すべて'], ...TERM_STORY_CAT.filter(c => STORIES.some(s => s.tcat === c)).map(c => [c, (TERM_STORY_ICON[c] || '') + ' ' + c])], '用語の分類');
   if (opts.storyKinds && st.skind === 'theme') sel('theme', [['', 'テーマ：すべて'], ...Object.entries(THEME_NAME).filter(([k]) => STORIES.some(s => s.theme === k))], 'テーマ');
   sel('region', [['', '地域：すべて'], ...REGIONS.map(r => [r.id, r.name])], '地域');
   sel('era', [['', '時代：すべて'], ...ERA_BINS.map(b => [b[2], b[2]])], '時代');
@@ -52,8 +53,8 @@ registerTool('stories', {
     const cnt = el('<div class="muted" style="max-width:1100px;margin:0 auto 6px;font-size:13px"></div>');
     const grid = el('<div class="pgrid" style="max-width:1100px;margin:0 auto"></div>');
     main.appendChild(f); main.appendChild(cnt); main.appendChild(grid);
-    listFilters(f, 'storyFilter', { storyKinds: true }, st => {
-      const ss = STORIES.filter(s => (!st.skind || storyKind(s) === st.skind) && (!st.theme || s.theme === st.theme) && (!st.region || s.region === st.region) && (!st.era || eraOf(s.steps[0].year) === st.era) && (!st.course || (s.tags || []).includes(st.course)));
+    listFilters(f, 'storyFilter', { storyKinds: true, search: true }, st => {
+      const ss = STORIES.filter(s => (!st.skind || storyKind(s) === st.skind) && (!st.theme || s.theme === st.theme) && (!st.tcat || s.tcat === st.tcat) && (!st.q || (s.title + (s.term || '') + (s.summary || '')).includes(st.q)) && (!st.region || s.region === st.region) && (!st.era || eraOf(s.steps[0].year) === st.era) && (!st.course || (s.tags || []).includes(st.course)));
       ss.sort((a, b) => st.sort === 'region' ? regionIndex(a.region) - regionIndex(b.region) || a.steps[0].year - b.steps[0].year : (st.sort === 'year-desc' ? -1 : 1) * (a.steps[0].year - b.steps[0].year));
       cnt.textContent = `${ss.length}本`;
       grid.innerHTML = '';
@@ -65,8 +66,8 @@ registerTool('stories', {
         const talk = s.steps.some(x => x.talk);
         grid.appendChild(el(`<a class="pcard" style="--c:${col};text-decoration:none;color:inherit" href="#story/${esc(s.id)}/1">
           ${thumbHtml(`story:${s.id}:1`)}
-          <b>${storyKind(s) === 'person' ? '👤' : storyKind(s) === 'theme' ? '🧭' : '▶'} ${esc(s.title)}</b>
-          <span class="m">${esc(STORY_KIND[storyKind(s)])}${s.theme ? '（' + esc(THEME_NAME[s.theme] || '') + '）' : ''}・${esc(s.period || '')}・${s.steps.length}場面・${esc((REGION[s.region] || {}).name || '')}${talk ? '・🎙 語りつき' : ''}</span>
+          <b>${storyKind(s) === 'person' ? '👤' : storyKind(s) === 'theme' ? '🧭' : storyKind(s) === 'term' ? (TERM_STORY_ICON[s.tcat] || '📘') : '▶'} ${esc(s.title)}</b>
+          <span class="m">${esc(STORY_KIND[storyKind(s)])}${s.theme ? '（' + esc(THEME_NAME[s.theme] || '') + '）' : ''}${s.tcat ? '（' + esc(s.tcat) + '）' : ''}・${esc(s.period || '')}・${s.steps.length}場面・${esc((REGION[s.region] || {}).name || '')}${talk ? '・🎙 語りつき' : ''}</span>
           <span class="t">${esc(s.summary || '')}</span>
         </a>`));
       });

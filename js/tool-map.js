@@ -509,6 +509,8 @@ registerTool('map', {
         <div class="st-bar"><i style="width:${playing ? 0 : 100}%"></i></div>
         <label class="ttsrow"><input type="checkbox" class="ttsck" ${SPEECH.on ? 'checked' : ''} ${SPEECH.ok ? '' : 'disabled'}> 🔊 音声で読み上げる${SPEECH.ok ? '' : '（このブラウザでは使えません）'}</label>
         ${si === 0 ? `<p class="muted" style="font-size:13.5px">${esc(story.summary || '')}</p>` : ''}
+        ${story.term && TERM[story.term] ? `<p style="font-size:13.5px">📘 用語集：<a class="term" data-term="${esc(story.term)}" href="#term/${encodeURIComponent(story.term)}">${esc(story.term)}</a></p>` : ''}
+        ${(story.exam || []).length && (si === 0 || si === story.steps.length - 1) ? `<div class="st-exam"><b>✏ テストのポイント</b><ul>${story.exam.map(x => `<li>${linkTerms(x, story.term)}</li>`).join('')}</ul></div>` : ''}
         ${si === story.steps.length - 1 && !playing ? `<p style="font-weight:700">おわり。${esc(story.summary || '')}</p>` : ''}
       </div>`);
       $('.backlink', box).addEventListener('click', endStory);

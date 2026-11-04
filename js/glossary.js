@@ -49,7 +49,7 @@ function openTerm(t) {
   const reg = REGION[g.region];
   // この語が出てくる出来事・物語・人物
   const evs = EVENTS.map((e, i) => ({ e, i })).filter(({ e }) => (e.title + (e.text || '')).includes(t)).slice(0, 8);
-  const sts = STORIES.filter(s => s.title.includes(t) || s.steps.some(x => (x.title + x.text).includes(t))).slice(0, 6);
+  const sts = STORIES.filter(s => s.kind !== 'term' && (s.title.includes(t) || s.steps.some(x => (x.title + x.text).includes(t)))).slice(0, 6);
   const pps = PEOPLE.filter(p => p.name.includes(t) || (p.keys || []).includes(t) || (p.text || '').includes(t)).slice(0, 8);
   const pol = POLITIES.find(p => p.name === t);
   const per = PEOPLE.find(p => p.name.replace(/（.*?）/g, '') === t || p.name === t);
@@ -71,6 +71,9 @@ function openTerm(t) {
   ov.addEventListener('click', e => { if (e.target === ov) close(); });
   $('.prof-x', ov).addEventListener('click', close);
   const bt = $('.term-btns', ov);
+  // この用語の物語があれば、いちばん目立つ所に
+  const tst = typeof termStoryOf === 'function' && termStoryOf(t);
+  if (tst) { const a = el(`<a class="btn primary term-story" href="#story/${esc(tst.id)}/1">▶ 物語で学ぶ（${tst.steps.length}場面）</a>`); a.addEventListener('click', close); bt.appendChild(a); }
   bt.appendChild(speakBtn(() => `${t}。${g.def}`));
   const ok = el(`<button type="button" class="chip">${termMastered()[t] ? '✅ 覚えた' : '☐ 覚えた'}</button>`);
   ok.addEventListener('click', () => { const v = !termMastered()[t]; setMastered(t, v); ok.textContent = v ? '✅ 覚えた' : '☐ 覚えた'; });
@@ -115,7 +118,7 @@ registerTool('glossary', {
     function page() {
       rows.slice(shown, shown + 120).forEach(g => {
         const ok = termMastered()[g.term];
-        const it = el(`<div class="gl-item${ok ? ' ok' : ''}"><a class="term gl-t" data-term="${esc(g.term)}" href="#term/${encodeURIComponent(g.term)}">${esc(g.term)}</a><span class="gl-y muted">${esc(g.yomi || '')}</span><span class="stars">${'★'.repeat(g.rank || 1)}</span><span class="gl-m muted">${esc(g.cat || '')}${g.year != null ? '・' + esc(yearLabel(g.year)) : ''}</span><div class="gl-d">${esc(g.def)}</div><button type="button" class="gl-ok" aria-label="覚えた">${ok ? '✅' : '☐'}</button></div>`);
+        const it = el(`<div class="gl-item${ok ? ' ok' : ''}"><a class="term gl-t" data-term="${esc(g.term)}" href="#term/${encodeURIComponent(g.term)}">${esc(g.term)}</a><span class="gl-y muted">${esc(g.yomi || '')}</span><span class="stars">${'★'.repeat(g.rank || 1)}</span><span class="gl-m muted">${esc(g.cat || '')}${g.year != null ? '・' + esc(yearLabel(g.year)) : ''}</span><div class="gl-d">${esc(g.def)}</div>${termStoryOf(g.term) ? `<a class="gl-st" href="#story/${esc(termStoryOf(g.term).id)}/1">▶ 物語で学ぶ</a>` : ''}<button type="button" class="gl-ok" aria-label="覚えた">${ok ? '✅' : '☐'}</button></div>`);
         $('.gl-ok', it).addEventListener('click', () => { const v = !termMastered()[g.term]; setMastered(g.term, v); it.classList.toggle('ok', v); $('.gl-ok', it).textContent = v ? '✅' : '☐'; });
         list.appendChild(it);
       });
