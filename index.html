@@ -543,6 +543,14 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .evlist { display: grid; gap: 4px; }
 .pcard .seen { justify-self: start; font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); }
 .pcard .seen.done { background: color-mix(in srgb, var(--ok) 22%, var(--panel)); color: var(--ink); }
+.sr-ov { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.35); display: flex; justify-content: center; align-items: flex-start; padding: max(8vh, 12px) 12px 12px; }
+.sr-card { background: var(--panel); color: var(--ink); width: min(680px, 100%); max-height: 84vh; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.3); display: flex; flex-direction: column; overflow: hidden; }
+.sr-head { display: flex; gap: 6px; padding: 10px; border-bottom: 1px solid var(--line); align-items: center; }
+.sr-head .prof-x { position: static; }
+.sr-in { flex: 1; min-width: 0; font-size: 16px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--ink); }
+.sr-res { overflow-y: auto; padding: 6px 14px 14px; }
+.sr-sec h3 { font-size: 14px; margin: 12px 0 4px; }
+.sr-sec ul.lst a { text-decoration: none; color: inherit; }
 .qreview { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .rec { max-width: 1000px; margin: 0 auto; display: grid; gap: 12px; }
 .rec-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
@@ -608,6 +616,7 @@ a.term:hover { color: var(--ai); background: color-mix(in srgb, var(--ai) 10%, t
   <div class="top-row">
     <h1 class="brand"><a href="#map">世界史<b>ラボ</b></a><small>年代を動かして見る ― 歴史総合・世界史探究</small></h1>
     <nav class="grpnav" id="grpnav" aria-label="モード"></nav>
+    <button type="button" class="icon-btn" id="searchBtn" aria-label="まとめて探す" title="まとめて探す（/ キー）">🔍<span class="lbl"> 探す</span></button>
     <button type="button" class="icon-btn" id="installBtn" hidden>📲<span class="lbl"> アプリにする</span></button>
     <button type="button" class="icon-btn" id="themeBtn" aria-label="明るさの切りかえ">◐</button>
   </div>
@@ -646,6 +655,7 @@ a.term:hover { color: var(--ai); background: color-mix(in srgb, var(--ai) 10%, t
 <script src="js/tool-quiz.js"></script>
 <script src="js/tool-lessons.js"></script>
 <script src="js/tool-record.js"></script>
+<script src="js/search.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

@@ -102,3 +102,5 @@ let installEv = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEv = e; $('#installBtn').hidden = false; setTopHeight(); });
 $('#installBtn').addEventListener('click', async () => { if (!installEv) return; installEv.prompt(); await installEv.userChoice.catch(() => {}); installEv = null; $('#installBtn').hidden = true; setTopHeight(); });
 window.addEventListener('appinstalled', () => { $('#installBtn').hidden = true; });
+
+$('#searchBtn').addEventListener('click', () => openSearch());
