@@ -79,7 +79,7 @@ registerTool('chrono', {
         g.append('text').attr('class', 'c-reg').attr('x', 6).attr('y', y0 + 14).text(r.name);
         g.append('line').attr('x1', 0).attr('x2', W).attr('y1', y0 - 4).attr('y2', y0 - 4).attr('stroke', 'var(--line)');
         items.forEach(it => {
-          if (it.x1 < LEFT - 200 || it.x0 > W + 10) return;
+          if (it.x1 < LEFT || it.x0 > W + 10) return;   // 画面の左（ラベルの列）に入るものは出さない
           const p = it.p, y = y0 + it.lane * (LANE + GAP);
           const bg = g.append('g').attr('class', 'cb' + (isLight(p.color) ? ' light' : '') + (sel === p.id ? ' sel' : '')).style('cursor', 'pointer');
           bg.append('rect').attr('x', Math.max(it.x0, LEFT - 4)).attr('y', y).attr('width', Math.max(3, it.x1 - Math.max(it.x0, LEFT - 4))).attr('height', LANE).attr('fill', p.color).attr('rx', 4)
@@ -98,7 +98,7 @@ registerTool('chrono', {
         g.append('text').attr('class', 'c-reg').attr('x', 6).attr('y', y0 + 14).text('人物');
         g.append('line').attr('x1', 0).attr('x2', W).attr('y1', y0 - 4).attr('y2', y0 - 4).attr('stroke', 'var(--line)');
         items.forEach(it => {
-          if (it.x1 < LEFT - 200 || it.x0 > W + 10) return;
+          if (it.x1 < LEFT || it.x0 > W + 10) return;   // 画面の左（ラベルの列）に入るものは出さない
           const p = it.p, y = y0 + it.lane * 18, c = (REGION[p.region] || {}).color || '#555';
           const gg = g.append('g').style('cursor', 'pointer');
           gg.append('rect').attr('x', Math.max(it.x0, LEFT - 4)).attr('y', y + 10).attr('width', Math.max(3, it.x1 - Math.max(it.x0, LEFT - 4))).attr('height', 5).attr('fill', c).attr('rx', 2);
