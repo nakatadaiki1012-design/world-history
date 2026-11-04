@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>世界史ラボ</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#8c2f39">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="世界史ラボ">
 <meta name="description" content="歴史総合・世界史探究の授業で使える、年代のツマミを動かすと地図の王朝や人物が変わる世界史の学習アプリ">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -589,6 +595,7 @@ a.term:hover { color: var(--ai); background: color-mix(in srgb, var(--ai) 10%, t
   <div class="top-row">
     <h1 class="brand"><a href="#map">世界史<b>ラボ</b></a><small>年代を動かして見る ― 歴史総合・世界史探究</small></h1>
     <nav class="grpnav" id="grpnav" aria-label="モード"></nav>
+    <button type="button" class="icon-btn" id="installBtn" hidden>📲<span class="lbl"> アプリにする</span></button>
     <button type="button" class="icon-btn" id="themeBtn" aria-label="明るさの切りかえ">◐</button>
   </div>
   <nav class="subnav" id="subnav" aria-label="画面" hidden></nav>

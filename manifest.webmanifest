@@ -1,0 +1,16 @@
+{
+  "name": "世界史ラボ",
+  "short_name": "世界史ラボ",
+  "description": "年代のツマミを動かすと、地図の王朝や人物が変わる世界史の学習アプリ（歴史総合・世界史探究）",
+  "lang": "ja",
+  "start_url": "./index.html#map",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3ede2",
+  "theme_color": "#8c2f39",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

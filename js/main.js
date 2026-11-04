@@ -91,3 +91,13 @@ window.addEventListener('resize', setTopHeight);
 route();
 // 地図をかき終えてから、残りを読みこむ
 requestAnimationFrame(() => setTimeout(loadLate, 30));
+
+// オフラインでも使えるように（ホーム画面に追加したアプリとしても動く）。ファイルを直接開いたときは使わない
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+// Android の Chrome など：「アプリにする」ボタンを出す
+let installEv = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEv = e; $('#installBtn').hidden = false; setTopHeight(); });
+$('#installBtn').addEventListener('click', async () => { if (!installEv) return; installEv.prompt(); await installEv.userChoice.catch(() => {}); installEv = null; $('#installBtn').hidden = true; setTopHeight(); });
+window.addEventListener('appinstalled', () => { $('#installBtn').hidden = true; });
