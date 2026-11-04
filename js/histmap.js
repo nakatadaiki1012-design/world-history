@@ -196,6 +196,7 @@ function createHistMap(host, opts = {}) {
 
   function resize() {
     const r = stage.getBoundingClientRect();
+    if (r.width < 40 || r.height < 40) return;   // まだ画面に並んでいない（大きさが決まったら、もう一度よばれる）
     const w = Math.max(200, Math.round(r.width)), h = Math.max(160, Math.round(r.height));
     if (w === st.w && h === st.h) return;
     st.w = w; st.h = h;
@@ -207,7 +208,7 @@ function createHistMap(host, opts = {}) {
     zoom.extent([[0, 0], [w, h]]).translateExtent([[-w * 0.6, -h * 0.6], [w * 1.6, h * 1.6]]);
     buildBase();
     if (st.cam) { zsel.interrupt(); flyTo(st.cam.lon, st.cam.lat, st.cam.span, null, 0); }
-    draw();
+    requestDraw();
   }
 
   // 画面上の形（SVG の d）を覚えておく：年を変えても、同じ形は計算しなおさない
@@ -266,7 +267,7 @@ function createHistMap(host, opts = {}) {
     })();
   }
   // 地形などのデータがあとから届いたら、かき直す
-  function onLate() { if (pr) { drawStatic(); draw(); } }
+  function onLate() { if (pr) { drawStatic(); requestDraw(); } }
   window.addEventListener('lateready', onLate);
   function buildBase() {
     pr = GEO.projection(st.view, st.w, st.h);
@@ -373,7 +374,7 @@ function createHistMap(host, opts = {}) {
   const inset = $('.hm-inset', root), isvg = d3.select($('svg', inset));
   inset.addEventListener('click', e => { e.stopPropagation(); zsel.transition().duration(500).call(zoom.transform, d3.zoomIdentity); });
   inset.addEventListener('pointerdown', e => e.stopPropagation());
-  let insetKey = '', insetIp = null;
+  let insetKey = '', insetIp = null, insetTimer = null;
   // 引きの地図は小さいので、形をあらくしたもの（0.2度より近い点は省く）を使う。一度作ったらとっておく
   const liteCache = new WeakMap();
   function lite(f) {
@@ -385,7 +386,8 @@ function createHistMap(host, opts = {}) {
     const poly = c => { const o = c.map(ring); return o[0] ? o.filter(Boolean) : null; };
     const G = f.geometry, cs = G.type === 'Polygon' ? [G.coordinates] : G.type === 'MultiPolygon' ? G.coordinates : null;
     if (!cs) { liteCache.set(f, f); return f; }
-    const out = cs.map(poly).filter(Boolean);
+    // あらくしたら向きが裏返った（地球の半分より大きくなった）形は、元の形のまま使う
+    const out = cs.map((c, i) => { const o = poly(c); return o && d3.geoArea({ type: 'Polygon', coordinates: o }) < 2 * Math.PI ? o : c; });
     g = { type: 'Feature', properties: f.properties, geometry: { type: 'MultiPolygon', coordinates: out } };
     liteCache.set(f, g); return g;
   }
@@ -438,11 +440,13 @@ function createHistMap(host, opts = {}) {
   function labelPoint(f) {
     const p = f.properties.p;
     // 決めてある名前の位置は、その時代の範囲の中にあるときだけ使う（国が小さくなった時代にずれないように）
-    if (p.label && d3.geoContains(f, p.label)) return pr(p.label);
     const key = st.view + '|' + p.id + '|' + f.properties.s.from;
     if (labelCache.has(key)) return labelCache.get(key);
+    // 名前の位置を決めるだけなので、あらくした形で計算する（細かい形より、ずっと速い。小さすぎて形が消えるときは細かい形で）
+    const lf0 = lite(f), lf = lf0 && lf0.geometry && lf0.geometry.coordinates.length ? lf0 : f;
+    if (p.label && d3.geoContains(lf, p.label)) { const q = pr(p.label); labelCache.set(key, q); return q; }
     let best = null, bestA = -1;
-    const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    const polys = lf.geometry.type === 'Polygon' ? [lf.geometry.coordinates] : lf.geometry.coordinates;
     polys.forEach(c => { const g = { type: 'Polygon', coordinates: c }; const a = d3.geoArea(g); if (a > bestA) { bestA = a; best = g; } });
     // 陸地の部分を優先：輪全体の中心が海のときもあるので、陸地にかかるいちばん大きい国の中心も候補に
     // 地図の端で切れた形でも位置がずれないように、球面上の中心を投影する
@@ -513,7 +517,8 @@ function createHistMap(host, opts = {}) {
     shownEvents.forEach(x => { const end = x.e.end || x.e.year; x.age = y >= x.e.year && y <= end ? 0 : Math.max(0, y - end); x.win = win; });
 
     placeOverlay();
-    drawInset();
+    // 引きの地図の国の色は、年が止まってから作りなおす（ツマミを動かしているあいだは四角だけ）
+    drawInset(true); clearTimeout(insetTimer); insetTimer = setTimeout(() => drawInset(), 350);
     // 年の表示
     $('.hm-yearbig', root).innerHTML = `${esc(yearLabel(y))}<small>${esc(eraName(y))}</small>`;
     if (opts.bar !== false) {
@@ -918,13 +923,13 @@ function createHistMap(host, opts = {}) {
     return labels;
   }
   function setStory(step) {
-    if (!step) { st.story = null; draw(); return; }
+    if (!step) { st.story = null; requestDraw(); return; }
     st.story = {
       center: { lon: step.lon, lat: step.lat, name: step.place },
       marks: step.marks || [], routes: step.routes || [], lines: step.lines || [],
       people: step.people || [], polities: step.polities || [], t0: performance.now()
     };
-    draw();
+    requestDraw();
     const S = st.story;
     (function tick() { if (st.story !== S) return; placeOverlay(); if (performance.now() - S.t0 < 3000) requestAnimationFrame(tick); })();
   }
@@ -956,7 +961,7 @@ function createHistMap(host, opts = {}) {
 
   function select(s) {
     st.sel = s;
-    draw();
+    requestDraw();
     if (opts.onSelect) opts.onSelect(s);
   }
 
@@ -1012,7 +1017,7 @@ function createHistMap(host, opts = {}) {
   setBox.addEventListener('pointerdown', e => e.stopPropagation());
   $$('[data-l]', setBox).forEach(c => {
     const k = c.dataset.l; c.checked = !!st.layers[k];
-    c.addEventListener('change', () => { st.layers[k] = c.checked; store.set('layers', st.layers); draw(); if (k === 'terrain') { updateTerrain(); scheduleRelief(true); } });
+    c.addEventListener('change', () => { st.layers[k] = c.checked; store.set('layers', st.layers); requestDraw(); if (k === 'terrain') { updateTerrain(); scheduleRelief(true); } });
   });
   $$('[data-u]', setBox).forEach(c => {
     const k = c.dataset.u; c.checked = !!ui[k];
@@ -1069,11 +1074,15 @@ function createHistMap(host, opts = {}) {
   }
   function stop() { clearInterval(st.playing); st.playing = null; const b = $('.hm-play', root); if (b) b.textContent = '▶'; }
 
+  // 描きなおしの注文は、1コマにまとめて1回だけ描く（同じコマで何度たのまれても）
+  let drawRaf = 0;
+  function requestDraw() { if (!pr) return; if (!drawRaf) drawRaf = requestAnimationFrame(() => { drawRaf = 0; draw(); }); }
   function setYear(y) {
     y = fixYear(y);
     if (y === st.year && pr) return;
     st.year = y;
-    draw();
+    // ツマミを速く動かしても、描くのは1コマに1回だけ（最後の年だけ描く）
+    requestDraw();
     if (opts.onYear) opts.onYear(y);
   }
   function setView(v, keepZoom) {
@@ -1082,7 +1091,7 @@ function createHistMap(host, opts = {}) {
     labelCache.clear();
     buildBase();
     if (!keepZoom) { st.t = d3.zoomIdentity; zsel.call(zoom.transform, d3.zoomIdentity); }
-    draw();
+    requestDraw();
     if (opts.onView) opts.onView(v);
   }
   // 点が見えるところへ（範囲の外なら、その点が入るいちばんせまい範囲に切りかえ）
@@ -1097,7 +1106,6 @@ function createHistMap(host, opts = {}) {
   const ro = new ResizeObserver(() => resize());
   ro.observe(stage);
   resize();
-  draw();
 
   return {
     root,

@@ -99,14 +99,24 @@ registerTool('econ', {
       const r = mapBox.getBoundingClientRect();
       MW = Math.max(300, r.width); MH = Math.max(200, r.height);
       msvg.attr('viewBox', `0 0 ${MW} ${MH}`);
-      pr = GEO.projection('world', MW, MH); path = d3.geoPath(pr);
+      pr = GEO.projection('world', MW, MH);
+      // 1ピクセルより近い点は省く（小さな地図なので、細かい点は見えない。描くのがずっと速くなる）
+      path = d3.geoPath({ stream: out => pr.stream({ _x: NaN, _y: NaN, _n: 0,
+        point(x, y) { if (this._n++ === 0 || Math.abs(x - this._x) + Math.abs(y - this._y) >= 0.8) { this._x = x; this._y = y; out.point(x, y); } },
+        lineStart() { this._n = 0; out.lineStart(); }, lineEnd() { out.lineEnd(); },
+        polygonStart() { out.polygonStart(); }, polygonEnd() { out.polygonEnd(); }, sphere() { out.sphere && out.sphere(); } }) });
       gM.selectAll('*').remove();
       gM.append('rect').attr('class', 'hm-sea').attr('width', MW).attr('height', MH);
-      gM.selectAll('path.ec').data(feats).join('path').attr('class', 'ec').attr('d', path)
+      // 同じ大きさの地図の形は、一度作ったら覚えておく（2回目からはすぐ出る）
+      const PC = window.__econPC || (window.__econPC = new Map()), pk = MW + 'x' + MH;
+      if (!PC.has(pk)) { if (PC.size > 3) PC.clear(); PC.set(pk, new Map()); }
+      const pc = PC.get(pk);
+      feats.forEach(f => { if (!pc.has(f)) pc.set(f, { d: path(f) || '', c: path.centroid(f) }); });
+      gM.selectAll('path.ec').data(feats).join('path').attr('class', 'ec').attr('d', f => pc.get(f).d)
         .on('mousemove', (ev, f) => { const c = byIso[f.id]; showTip(ev, c ? `<b>${esc(c.ja)}</b><br>${esc(tipText(c))}` : 'データなし'); })
         .on('mouseleave', () => { tip.hidden = true; })
         .on('click', (ev, f) => { const c = byIso[f.id]; if (c) togglePick(c.en); });
-      feats.forEach(f => { f.cen = path.centroid(f); });
+      feats.forEach(f => { f.cen = pc.get(f).c; });
     }
     function tipText(c) {
       const d = ECON_IND.find(x => x.id === ind), v = val(c, year);

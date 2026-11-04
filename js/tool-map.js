@@ -6,11 +6,13 @@ registerTool('map', {
     main.appendChild(wrap);
     const box = $('.mapbox', wrap), tabs = $('.tabs', wrap), body = $('.side-body', wrap);
     let tab = store.get('mapTab', 'year');
-    const year0 = params.year != null ? params.year : store.get('year', 750);
-    const view0 = params.view || store.get('view', 'world');
+    // 物語から開くときは、はじめからその物語の地域・年で地図を作る（作りなおしを省く）
+    const st0 = params.story && STORY[params.story], sp0 = st0 && st0.steps[Math.max(0, (params.step || 1) - 1)];
+    const year0 = sp0 ? fixYear(sp0.year) : params.year != null ? params.year : store.get('year', 750);
+    const view0 = st0 ? (st0.view || REGION_VIEW[st0.region] || 'world') : params.view || store.get('view', 'world');
     const map = createHistMap(box, {
       year: year0, view: view0,
-      onYear: y => { store.set('year', y); syncHash(); renderSide(); },
+      onYear: y => { yearSave(y); renderSide(220); },
       onView: v => { store.set('view', v); syncHash(); renderSide(); },
       onSelect: () => { syncHash(); renderSide(); }
     });
@@ -37,10 +39,14 @@ registerTool('map', {
     }
 
     let timer = null;
-    function renderSide() {
+    // 横の欄は、年がしばらく止まってから描きなおす（ツマミや再生の最中に何度も作らない）
+    function renderSide(wait) {
       clearTimeout(timer);
-      timer = setTimeout(renderSideNow, 40);
+      timer = setTimeout(renderSideNow, wait || 40);
     }
+    // 年の保存と URL の書きかえも、少しまとめてから
+    let ySaveT = null;
+    function yearSave(y) { clearTimeout(ySaveT); ySaveT = setTimeout(() => { store.set('year', y); syncHash(); }, 250); }
     function renderSideNow() {
       const s = map.sel;
       renderTabs(!!s || !!story);

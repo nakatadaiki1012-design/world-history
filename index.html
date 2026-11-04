@@ -525,6 +525,10 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .lf-head { grid-column: 1 / -1; margin: 14px 0 2px; font-size: 17px; border-bottom: 2px solid var(--line); padding-bottom: 3px; }
 .pcard .thumbimg { margin: -10px -12px 4px; width: calc(100% + 24px); height: 120px; object-fit: cover; border-radius: 9px 9px 0 0; background: var(--chip); }
 .evlist { display: grid; gap: 4px; }
+/* 長い一覧：画面の外のカードは、近づくまで並べる計算をしない（開くのが速くなる） */
+.pcard { content-visibility: auto; contain-intrinsic-size: auto 120px; }
+.evrow { content-visibility: auto; contain-intrinsic-size: auto 56px; }
+.gl-item { content-visibility: auto; contain-intrinsic-size: auto 110px; }
 .evrow { display: grid; grid-template-columns: 6.5em 5.2em 1fr; gap: 8px; align-items: start; padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); text-decoration: none; color: inherit; }
 .evrow:hover { background: var(--chip); }
 .evrow .y { font-weight: 700; text-align: right; }
