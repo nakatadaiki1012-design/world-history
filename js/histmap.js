@@ -147,10 +147,11 @@ function createHistMap(host, opts = {}) {
   // --- 拡大・移動 ---
   // 指やマウスで動かしているあいだは、地図を「1枚の絵」としてずらす・拡大するだけにする（とても軽い）。
   // はなしたら、その位置でくっきり描きなおす。物語のカメラなど、自動の動きはこれまでどおり
-  let gest = null;
+  let gest = null, startT = null;
   const zsel = d3.select(stage);
   const zoom = d3.zoom().scaleExtent([1, 400])
     .filter(ev => (!ev.ctrlKey || ev.type === 'wheel') && !ev.button && svgEl.contains(ev.target))
+    .on('start.moved', () => { startT = st.t; })
     .on('start.fast', ev => {
       if (!ev.sourceEvent || opts.mini || gest) return;
       gest = { t0: st.t };
@@ -183,7 +184,7 @@ function createHistMap(host, opts = {}) {
     gZoom.attr('transform', st.t);
     updateTerrain(); placeOverlay();
   }
-  zoom.on('end.relief', ev => { endGest(); updateDetail(); drawInset(); scheduleRelief(); if (ev.sourceEvent) { markNear(); showViews(4000); } });
+  zoom.on('end.relief', ev => { endGest(); updateDetail(); drawInset(); scheduleRelief(); if (ev.sourceEvent && startT && (Math.abs(startT.x - st.t.x) + Math.abs(startT.y - st.t.y) > 4 || Math.abs(startT.k - st.t.k) > 0.01)) { markNear(); showViews(4000); } });
   zsel.call(zoom).on('dblclick.zoom', null);
   // 最初に少しだけ見せて、ここにあることを知らせる
   setTimeout(() => showViews(3500), 300);
@@ -564,10 +565,19 @@ function createHistMap(host, opts = {}) {
       const pl = PLACE[sel.id], nm = placeNameAt(pl, st.year), q = nm && pr([pl.lon, pl.lat]);
       if (q) {
         const [x, y] = t.apply(q), S = st.ls || 1, w = textW(nm.name, 14 * S, true) + 8, h = 17 * S;
-        // 近くに人物がいれば、その輪の上に出す
-        const crowd = shownPeople.some(o => { const qq = pr([o.pl.lon, o.pl.lat]); if (!qq) return false; const [a, b] = t.apply(qq); return Math.hypot(a - x, b - y) < 20; });
-        const off = crowd ? 46 : 8;
-        selPlaceBox = [x - w / 2, y - off - h, x + w / 2, y - off]; selPlaceBox.off = off; boxes.push(selPlaceBox);
+        // 点のすぐ上・下・右・左のうち、人物の写真にかからない所に置く（点から離さない）
+        const pts = shownPeople.map(o => { const qq = pr([o.pl.lon, o.pl.lat]); return qq ? t.apply(qq) : null; }).filter(Boolean);
+        const free = b => !pts.some(([a, c]) => a > b[0] - 13 && a < b[2] + 13 && c > b[1] - 13 && c < b[3] + 13);
+        const G = 9;
+        const cands = [
+          { b: [x - w / 2, y - G - h, x + w / 2, y - G], dx: 0, dy: -G - h / 2, a: 'middle' },
+          { b: [x - w / 2, y + G, x + w / 2, y + G + h], dx: 0, dy: G + h / 2, a: 'middle' },
+          { b: [x + G, y - h / 2, x + G + w, y + h / 2], dx: G + 4, dy: 0, a: 'start' },
+          { b: [x - G - w, y - h / 2, x - G, y + h / 2], dx: -G - 4, dy: 0, a: 'end' }
+        ];
+        // どこも写真にかかるときは、上に少し離して置き、点まで細い線を引く
+        const c = cands.find(c => free(c.b)) || { b: [x - w / 2, y - 46 - h, x + w / 2, y - 46], dx: 0, dy: -46 - h / 2, a: 'middle', leader: 46 };
+        selPlaceBox = c.b; selPlaceBox.lab = c; boxes.push(selPlaceBox);
       }
     }
     // 人物の点（近すぎるものは輪のように広げる）
@@ -669,7 +679,7 @@ function createHistMap(host, opts = {}) {
     });
     plc.forEach(o => {
       const S = st.ls || 1, w = textW(o.name, 12 * S, true), h = 14 * S;
-      if (o.sel && selPlaceBox) { o.lab = { dx: 0, dy: -selPlaceBox.off - h / 2, a: 'middle' }; return; }
+      if (o.sel && selPlaceBox) { o.lab = selPlaceBox.lab; return; }
       jobs.push({ pri: o.sel ? 0 : (o.pl.rank || 2) === 1 ? 1.5 : 4.9, sub: o.pl.rank || 2, run: () => { o.lab = tryPlace(side(o.x, o.y, 6, w, h, o.sel).concat(side(o.x, o.y, 17, w, h, false))); } });   // 人物の写真と重なるときは少し外側に
     });
     caps.forEach(c => {
@@ -743,10 +753,12 @@ function createHistMap(host, opts = {}) {
     const ps2 = gPlc.selectAll('g').data(plc, d => d.pl.id);
     ps2.exit().remove();
     const pe2 = ps2.enter().append('g').attr('class', 'hm-plc')
-      .on('click', (ev, d) => { ev.stopPropagation(); select({ type: 'place', id: d.pl.id }); })
+      .on('click', (ev, d) => { ev.stopPropagation(); const [mx, my] = d3.pointer(ev, svgEl); const cur = gPlc.selectAll('g.hm-plc').data(); let best = d, bd = Math.hypot(d.x - mx, d.y - my); cur.forEach(o => { const dd = Math.hypot(o.x - mx, o.y - my); if (dd < bd - 0.5) { bd = dd; best = o; } }); select({ type: 'place', id: best.pl.id }); })
       .on('mousemove', (ev, d) => showTip(ev, `<b>${esc(d.name)}</b>${(() => { const m = d.pl.modern; if (!m || m === d.name) return ''; const r = m.startsWith(d.name) ? m.slice(d.name.length).replace(/^（(.*)）$/, '$1') : m; return r ? `（今の${esc(r)}）` : ''; })()}<br><span style="font-size:12px">${esc(d.pl.text || '')}</span>`))
       .on('mouseleave', hideTip);
+    pe2.append('line').attr('class', 'lead');
     pe2.append('path').attr('d', 'M0,-4.5L4.5,0L0,4.5L-4.5,0Z');
+    pe2.append('rect').attr('class', 'selbg');
     pe2.append('text').attr('dominant-baseline', 'central');
     const pm2 = pe2.merge(ps2).attr('transform', d => `translate(${d.x},${d.y})`).classed('sel', d => d.sel).classed('cap', d => !!d.cap);
     pm2.filter(d => d.sel).raise();
@@ -755,6 +767,14 @@ function createHistMap(host, opts = {}) {
       const s = d3.select(this);
       if (!d.lab) { s.text(''); return; }
       s.attr('x', d.lab.dx).attr('y', d.lab.dy).attr('text-anchor', d.lab.a).text(d.name);
+    });
+    // えらんだ地名：名前の後ろに白い札、離れたときは点まで線
+    pm2.each(function (d) {
+      const g = d3.select(this), r = g.select('rect.selbg'), ln = g.select('line.lead');
+      if (!d.sel || !d.lab) { r.attr('width', 0).attr('height', 0); ln.attr('y2', 0).attr('y1', 0); return; }
+      const bb = this.querySelector('text').getBBox();
+      r.attr('x', bb.x - 5).attr('y', bb.y - 2).attr('width', bb.width + 10).attr('height', bb.height + 4).attr('rx', 6);
+      if (d.lab.leader) ln.attr('x1', 0).attr('y1', -5).attr('x2', 0).attr('y2', -d.lab.leader + 2); else ln.attr('y1', 0).attr('y2', 0);
     });
     const vs = gEv.selectAll('g').data(evs, d => d.i);
     vs.exit().remove();

@@ -166,11 +166,13 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .hm-inset text { font-size: 9px; font-weight: 700; text-anchor: middle; fill: var(--ink); stroke: var(--halo); stroke-width: 2px; paint-order: stroke; }
 .hm-plc { cursor: pointer; }
 .hm-plc path { fill: #8a5a2b; stroke: #fff; stroke-width: 1.2; }
-.hm-plc.cap path { display: none; }
+.hm-plc.cap:not(.sel) path { display: none; }
 .hm-plc.sel path { fill: var(--accent); }
 .hm-plc text { font-family: var(--font-display); font-size: calc(12px * var(--ls, 1)); font-weight: 800; fill: #6b4423; stroke: var(--halo); stroke-width: 3px; paint-order: stroke; }
 :root[data-theme="dark"] .hm-plc text { fill: #e2b98a; }
-.hm-plc.sel text { fill: var(--accent); font-size: calc(14px * var(--ls, 1)); text-decoration: underline; }
+.hm-plc.sel text { fill: var(--accent); font-size: calc(14px * var(--ls, 1)); stroke: none; }
+.hm-plc rect.selbg { fill: var(--panel); stroke: var(--accent); stroke-width: 1.4; opacity: .96; }
+.hm-plc line.lead { stroke: var(--accent); stroke-width: 1.4; }
 .hm-plc.sel path { transform: scale(1.5); }
 .hm-edge { fill: none; stroke-width: .9; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; pointer-events: none; opacity: .55; }
 .hm-lab { font-family: var(--font-display); font-weight: 800; fill: var(--label); stroke: var(--halo); stroke-width: 3.5px; paint-order: stroke; text-anchor: middle; dominant-baseline: central; pointer-events: none; letter-spacing: .04em; }
