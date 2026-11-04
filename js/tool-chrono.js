@@ -55,7 +55,7 @@ registerTool('chrono', {
     }
 
     function draw() {
-      W = Math.max(500, sw.clientWidth);
+      W = Math.max(300, sw.clientWidth);
       zoom.extent([[LEFT, 0], [W, 100]]).translateExtent([[LEFT, 0], [W, 100]]);
       svg.selectAll('*').remove();
       let y0 = 30;
@@ -108,7 +108,7 @@ registerTool('chrono', {
         y0 += ends.length * 18 + 14;
       }
       const H = Math.max(y0 + 10, sw.clientHeight);
-      svg.attr('height', H).attr('viewBox', `0 0 ${W} ${H}`);
+      svg.attr('width', W).attr('height', H).attr('viewBox', `0 0 ${W} ${H}`);
       // 目盛り
       const ax = svg.append('g').attr('class', 'c-axis');
       const cands = [];
@@ -178,7 +178,7 @@ registerTool('chrono', {
 
     // はじめは今の年のあたりを少し拡大して見せる
     requestAnimationFrame(() => {
-      W = Math.max(500, sw.clientWidth);
+      W = Math.max(300, sw.clientWidth);
       const k = 3, x = LEFT + yearToPos(year) / 100 * (W - LEFT - 12);
       t = d3.zoomIdentity.translate((LEFT + W) / 2 - x * k, 0).scale(k);
       svg.call(zoom.transform, t);

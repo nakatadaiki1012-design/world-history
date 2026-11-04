@@ -15,6 +15,34 @@ function loadLate() {
 }
 let waitingRoute = false;
 
+// 上の切りかえボタン。スマホでは、えらんだ組の中のボタン（出来事・年表…）を2段目に横いっぱいに並べる
+let navState = null;
+const isPhone = () => window.matchMedia('(max-width: 720px)').matches;
+function renderNav() {
+  if (!navState) return;
+  const { own, secKey } = navState;
+  const nav = $('#grpnav'), sub = $('#subnav'); nav.innerHTML = ''; sub.innerHTML = '';
+  const phone = isPhone();
+  GROUPS.forEach(g => {
+    const b = el(`<button type="button" class="g" aria-current="${g === own}">${g.name}</button>`);
+    b.addEventListener('click', () => { location.hash = '#' + g.secs[0][0]; });
+    nav.appendChild(b);
+    if (g !== own || g.secs.length < 2) return;
+    const subs = el('<span class="subs"></span>');
+    g.secs.forEach(([k, n]) => {
+      const s = el(`<button type="button" aria-current="${k === secKey}">${n}</button>`);
+      s.addEventListener('click', () => { location.hash = '#' + k; });
+      subs.appendChild(s);
+    });
+    (phone ? sub : nav).appendChild(subs);
+  });
+  sub.hidden = !sub.children.length;
+  const cur = $('button[aria-current="true"]', sub);
+  if (cur) requestAnimationFrame(() => { sub.scrollLeft = Math.max(0, cur.offsetLeft - sub.clientWidth / 2 + cur.offsetWidth / 2); });
+}
+let wasPhone = isPhone();
+window.addEventListener('resize', () => { if (isPhone() !== wasPhone) { wasPhone = isPhone(); renderNav(); setTopHeight(); } });
+
 let current = null;
 function route() {
   const h = decodeURIComponent(location.hash.replace(/^#/, '')) || 'map';
@@ -31,20 +59,8 @@ function route() {
   if (id === 'glossary') params = { term: parts[1] };
   const secKey = id === 'lessons' ? `lessons/${params.course}` : id === 'story' ? 'stories' : id;
   const own = GROUPS.find(g => g.secs.some(s => s[0] === secKey)) || GROUPS[0];
-  const nav = $('#grpnav'); nav.innerHTML = '';
-  GROUPS.forEach(g => {
-    const b = el(`<button type="button" class="g" aria-current="${g === own}">${g.name}</button>`);
-    b.addEventListener('click', () => { location.hash = '#' + g.secs[0][0]; });
-    nav.appendChild(b);
-    if (g !== own || g.secs.length < 2) return;
-    const subs = el('<span class="subs"></span>');
-    g.secs.forEach(([k, n]) => {
-      const s = el(`<button type="button" aria-current="${k === secKey}">${n}</button>`);
-      s.addEventListener('click', () => { location.hash = '#' + k; });
-      subs.appendChild(s);
-    });
-    nav.appendChild(subs);
-  });
+  navState = { own, secKey };
+  renderNav();
   if (current) { try { current(); } catch (e) { /* 片づけの失敗は無視 */ } }
   const main = $('#main');
   main.innerHTML = '';
