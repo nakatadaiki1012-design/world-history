@@ -455,6 +455,8 @@ registerTool('map', {
       clearTimeout(stTimer);
       si = clamp(i, 0, story.steps.length - 1);
       const s = story.steps[si];
+      // どこまで見たかを記録（学習の記録・一覧の ✓ に使う）
+      if (!story.generated) { const rec = store.get('storySeen', {}); const o = rec[story.id] || { n: 0 }; o.n = Math.max(o.n, si + 1); o.of = story.steps.length; o.t = Date.now(); if (si === story.steps.length - 1) o.done = 1; rec[story.id] = o; store.set('storySeen', rec); }
       map.setYear(s.year);
       map.setStory(s);
       // 場面が今の地域の外なら、その場所が入る地域に切りかえる（遠くの大陸へとぶとき）

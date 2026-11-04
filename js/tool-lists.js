@@ -64,9 +64,10 @@ registerTool('stories', {
         if (head !== lastHead) { grid.appendChild(el(`<h3 class="lf-head">${esc(head || '')}</h3>`)); lastHead = head; }
         const col = (REGION[s.region] || {}).color || '#555';
         const talk = s.steps.some(x => x.talk);
+        const seen = (store.get('storySeen', {}))[s.id];
         grid.appendChild(el(`<a class="pcard" style="--c:${col};text-decoration:none;color:inherit" href="#story/${esc(s.id)}/1">
           ${thumbHtml(`story:${s.id}:1`)}
-          <b>${storyKind(s) === 'person' ? '👤' : storyKind(s) === 'theme' ? '🧭' : storyKind(s) === 'term' ? (TERM_STORY_ICON[s.tcat] || '📘') : '▶'} ${esc(s.title)}</b>
+          ${seen ? `<span class="seen${seen.done ? ' done' : ''}">${seen.done ? '✓ 見た' : `${seen.n}/${s.steps.length}`}</span>` : ''}<b>${storyKind(s) === 'person' ? '👤' : storyKind(s) === 'theme' ? '🧭' : storyKind(s) === 'term' ? (TERM_STORY_ICON[s.tcat] || '📘') : '▶'} ${esc(s.title)}</b>
           <span class="m">${esc(STORY_KIND[storyKind(s)])}${s.theme ? '（' + esc(THEME_NAME[s.theme] || '') + '）' : ''}${s.tcat ? '（' + esc(s.tcat) + '）' : ''}・${esc(s.period || '')}・${s.steps.length}場面・${esc((REGION[s.region] || {}).name || '')}${talk ? '・🎙 語りつき' : ''}</span>
           <span class="t">${esc(s.summary || '')}</span>
         </a>`));

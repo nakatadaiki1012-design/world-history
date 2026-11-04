@@ -140,9 +140,16 @@ function quizMaker(course) {
   return type => { for (let i = 0; i < 20; i++) { const r = mk[type](); if (r) return r; } return null; };
 }
 
+// まちがえた問題のノート（あとで復習できるように、問題そのものを保存する）
+const WRONG_KEY = 'wrongQ';
+function wrongList() { return store.get(WRONG_KEY, []); }
+function saveQ(q) { return { q: q.q, c: q.c, a: q.a, exp: q.exp || '', term: q.term, person: q.person, map: q.map, lesson: q.lesson ? { id: q.lesson.id, course: q.lesson.course, title: q.lesson.title } : null, t: Date.now() }; }
+function addWrong(q) { const L = wrongList().filter(x => x.q !== q.q); L.unshift(saveQ(q)); store.set(WRONG_KEY, L.slice(0, 150)); }
+function removeWrong(q) { const L = wrongList(); const M = L.filter(x => x.q !== q.q); if (M.length !== L.length) store.set(WRONG_KEY, M); }
+
 registerTool('quiz', {
   name: 'クイズ',
-  render(main) {
+  render(main, params) {
     const box = el('<div class="quiz"></div>');
     main.appendChild(box);
     let cfg = Object.assign({ course: '', types: ['map', 'capital', 'same', 'order', 'who', 'lesson', 'termdef', 'defterm'], n: 10 }, store.get('quizCfg', {}));
@@ -157,7 +164,9 @@ registerTool('quiz', {
         <div class="row"><b>問題の種類</b></div>
         <div class="row"><b>問題の数</b></div>
         <div><button type="button" class="btn primary">スタート</button> <span class="muted" style="font-size:13px">${best.n ? `これまでの最高：${best.score}/${best.n}` : ''}</span></div>
+        ${wrongList().length ? `<div class="qreview"><button type="button" class="btn rv">📝 まちがえた問題を復習（${wrongList().length}問）</button><div class="muted" style="font-size:12.5px;margin-top:4px">正解すると、ノートから消えます。</div></div>` : ''}
       </div>`);
+      const rv = $('.rv', s); if (rv) rv.addEventListener('click', () => start(true));
       const rows = $$('.row', s);
       [['', 'すべて'], ['sogo', '歴史総合'], ['tankyu', '世界史探究']].forEach(([k, n]) => {
         const b = el(`<button type="button" class="chip" aria-pressed="${cfg.course === k}">${n}</button>`);
@@ -177,10 +186,13 @@ registerTool('quiz', {
       $('.btn.primary', s).addEventListener('click', () => { store.set('quizCfg', cfg); start(); });
       box.appendChild(s);
     }
-    function start() {
+    function start(review) {
       const make = quizMaker(cfg.course);
       const qs = [];
-      for (let i = 0; i < cfg.n * 3 && qs.length < cfg.n; i++) {
+      // 復習：ノートの問題から（新しいものから最大20問。順番はまぜる）。選択肢の順番も入れかえる
+      if (review) wrongList().slice(0, 20).forEach(w => { const o = shuffle(w.c.map((_, k) => k)); qs.push(Object.assign({}, w, { c: o.map(k => w.c[k]), a: o.indexOf(w.a), review: true })); });
+      if (review) { const sh = shuffle(qs); qs.length = 0; sh.forEach(x => qs.push(x)); }
+      for (let i = 0; !review && i < cfg.n * 3 && qs.length < cfg.n; i++) {
         const q = make(cfg.types[i % cfg.types.length === 0 ? Math.floor(Math.random() * cfg.types.length) : Math.floor(Math.random() * cfg.types.length)]);
         if (q && !qs.some(x => x.q === q.q)) qs.push(q);
       }
@@ -208,7 +220,7 @@ registerTool('quiz', {
           b.addEventListener('click', () => {
             if (ch.dataset.done) return; ch.dataset.done = '1';
             const ok = k === q.a;
-            if (ok) { score++; streak++; } else streak = 0;
+            if (ok) { score++; streak++; removeWrong(q); } else { streak = 0; addWrong(q); }
             $$('button', ch).forEach((x, j) => { if (j === q.a) x.classList.add('ok'); else if (j === k) x.classList.add('ng'); });
             const res = el(`<div class="qres"><span class="mark" style="color:${ok ? 'var(--ok)' : 'var(--ng)'}">${ok ? '◯' : '✕'}</span>${esc(q.exp)}</div>`);
             const links = el('<div class="keys" style="margin-top:8px"></div>');
@@ -228,22 +240,27 @@ registerTool('quiz', {
       }
       function result() {
         const best = store.get('quizBest', {});
-        if (!best.n || score / qs.length > best.score / best.n) store.set('quizBest', { score, n: qs.length });
+        if (!review && (!best.n || score / qs.length > best.score / best.n)) store.set('quizBest', { score, n: qs.length });
+        // 学習の記録に残す
+        const H = store.get('quizHist', []); H.push({ t: Date.now(), score, n: qs.length, course: cfg.course, review: !!review }); store.set('quizHist', H.slice(-200));
         const stars = score / qs.length >= 0.9 ? '★★★' : score / qs.length >= 0.6 ? '★★☆' : score / qs.length >= 0.3 ? '★☆☆' : '☆☆☆';
         const r = el(`<div class="card qbox" style="text-align:center">
           <div class="score">${score} / ${qs.length}</div>
           <div style="font-size:30px;color:#d4a017">${stars}</div>
-          <p>${score === qs.length ? 'パーフェクト！' : 'まちがえた問題は、地図や授業で確かめてみよう。'}</p>
+          <p>${score === qs.length ? 'パーフェクト！' : 'まちがえた問題は「まちがえた問題を復習」で、もう一度とけます。'}</p>
           <button type="button" class="btn primary">もう一度</button> <button type="button" class="btn">設定にもどる</button>
+          ${wrongList().length ? `<button type="button" class="btn rv2">📝 復習（${wrongList().length}問）</button>` : ''}
+          <div style="margin-top:10px"><a href="#record" style="font-size:13.5px">📊 学習の記録を見る</a></div>
         </div>`);
         const bs = $$('button', r);
-        bs[0].addEventListener('click', start); bs[1].addEventListener('click', setup);
+        bs[0].addEventListener('click', () => start(review)); bs[1].addEventListener('click', setup);
+        if ($('.rv2', r)) $('.rv2', r).addEventListener('click', () => start(true));
         box.appendChild(r);
       }
-      if (!qs.length) { box.innerHTML = '<p class="empty">問題を作れませんでした。種類や科目を変えてみてください。</p>'; return; }
+      if (!qs.length) { box.innerHTML = review ? '<p class="empty">復習する問題はありません。</p>' : '<p class="empty">問題を作れませんでした。種類や科目を変えてみてください。</p>'; return; }
       show();
     }
-    setup();
+    if (params && params.review && wrongList().length) start(true); else setup();
     return () => { if (mini) mini.destroy(); };
   }
 });
