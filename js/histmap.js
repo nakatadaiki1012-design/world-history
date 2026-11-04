@@ -612,7 +612,7 @@ function createHistMap(host, opts = {}) {
         const nm = placeNameAt(pl, st.year); if (!nm) return;
         const q = pr([pl.lon, pl.lat]); if (!q) return;
         const [x, y] = t.apply(q); if (!inView(x, y)) return;
-        if (storyLabels.some(m => Math.hypot(m.x - x, m.y - y) < 14)) return;
+        if (storyLabels.some(m => Math.hypot(m.x - x, m.y - y) < 7)) return;
         plc.push({ pl, name: nm.name, x, y, lab: null, sel: sel && sel.type === 'place' && sel.id === pl.id });
         boxes.push([x - 4, y - 4, x + 4, y + 4]);
       });
@@ -625,7 +625,7 @@ function createHistMap(host, opts = {}) {
       const q = pr([c.lon, c.lat]); if (!q) return;
       const [x, y] = t.apply(q); if (!inView(x, y)) return;
       if (caps.some(o => Math.hypot(o.x - x, o.y - y) < 5)) return;
-      if (storyLabels.some(m => Math.hypot(m.x - x, m.y - y) < 14)) return;   // 物語の地点と同じ場所の都は出さない
+      if (storyLabels.some(m => Math.hypot(m.x - x, m.y - y) < 7)) return;   // 物語の地点と同じ場所の都は出さない
       const merged = plc.find(o => Math.hypot(o.x - x, o.y - y) < 9);
       if (merged) merged.cap = true;
       caps.push({ id: p.id + c.name, name: c.name, x, y, rank: p.rank || 2, lab: null, merged: !!merged });
@@ -934,8 +934,52 @@ function createHistMap(host, opts = {}) {
     (function tick() { if (st.story !== S) return; placeOverlay(); if (performance.now() - S.t0 < 3000) requestAnimationFrame(tick); })();
   }
   // その地点を中心に、横 span 度ぶんが入るように拡大して移動
-  function flyTo(lon, lat, span, view, dur = 1500) {
+  // --- まわりの「見どころ」の多さで、寄り方を決める ---
+  // 町・地名・都がたくさんある所はもっと寄り、何もなくてのっぺりした所は引いて、まわりも見えるようにする
+  let lmCache = { key: '', pts: [] };
+  function landmarks() {
+    const key = Math.round(st.year / 20) + '|' + (window.CITIES || []).length;
+    if (lmCache.key === key) return lmCache.pts;
+    const y = st.year, pts = [];
+    PLACES.forEach(p => { if (placeNameAt(p, y)) pts.push([p.lon, p.lat, (p.rank || 2) === 1 ? 1.5 : 1]); });
+    POLITIES.forEach(p => { if (y < p.start || y > p.end) return; const c = GEO.capitalAt(p, y); if (c) pts.push([c.lon, c.lat, 1]); });
+    (window.CITIES || []).forEach(([, lon, lat, r]) => pts.push([lon, lat, 0.4, r]));
+    lmCache = { key, pts };
+    return pts;
+  }
+  // 横 span 度の画面に、見どころがどれだけ散らばって入るか（画面を 8×6 のマスに分けて、何かがあるマスを数える。同じ場所に重なるものは1つ）
+  function richness(lon, lat, span) {
+    const cs = Math.max(0.25, Math.cos(lat * Math.PI / 180)), hx = span / 2 / cs, hy = span / 2 * (st.h / Math.max(1, st.w));
+    // 拡大するほど小さな町も地図に出るので、その大きさで見える町だけ数える
+    const maxR = span < 1.5 ? 6 : span < 4 ? 5 : span < 10 ? 4 : span < 25 ? 3 : 2;
+    const cells = new Set();
+    landmarks().forEach(([x, y, w, r]) => {
+      if (r != null && r > maxR) return;
+      let dx = x - lon; if (dx > 180) dx -= 360; if (dx < -180) dx += 360;
+      const dy = y - lat;
+      if (Math.abs(dx) >= hx || Math.abs(dy) >= hy) return;
+      cells.add(Math.floor((dx + hx) / hx * 4) + ',' + Math.floor((dy + hy) / hy * 3));
+    });
+    return cells.size;
+  }
+  // keep：かならず画面に入れたい点（物語の地点・進路など）
+  function autoSpan(lon, lat, span, keep) {
+    const cs = Math.max(0.25, Math.cos(lat * Math.PI / 180)), asp = st.w / Math.max(1, st.h);
+    let need = 0;
+    // 物語の地点のうち、もともとの範囲の近く（1.5倍まで）にあるものだけは、かならず入れる（遠くのものは、作った人が入れないつもりの所）
+    (keep || []).forEach(([x, y]) => { let dx = Math.abs(x - lon); if (dx > 180) dx = 360 - dx; const ex = dx * cs * 2.3, ey = Math.abs(y - lat) * 2.3 * asp; if (Math.max(ex, ey) <= span * 1.5) need = Math.max(need, ex, ey); });
+    const lo = Math.max(need, span * 0.45, 0.12), hi = Math.max(need, Math.min(Math.max(span * 4, span < 3 ? 6 : 0), 80));   // とても寄った場面は、6度くらいまでは引いてよい
+    let s = Math.max(span, need);
+    const R = x => richness(lon, lat, x);
+    // にぎやか（マスの半分近くに何かある）なら寄る。さみしい（6マス未満）なら引く
+    if (R(s) > 15) { while (s * 0.85 >= lo && R(s * 0.85) >= 10) s *= 0.85; }
+    else if (R(s) < 6) { while (s * 1.2 <= hi && R(s) < 6) s *= 1.2; }
+    return Math.max(s, need);
+  }
+
+  function flyTo(lon, lat, span, view, dur = 1500, keep) {
     if (view && GEO.VIEWS[view] && view !== st.view) setView(view);
+    if (keep) span = autoSpan(lon, lat, span, keep === true ? [] : keep);
     st.cam = { lon, lat, span };
     const q = pr([lon, lat]);
     if (!q) { setView('world'); return; }
@@ -1112,7 +1156,7 @@ function createHistMap(host, opts = {}) {
     get year() { return st.year; },
     get view() { return st.view; },
     get sel() { return st.sel; },
-    setYear, setView, select, focusOn, stop, setStory, flyTo,
+    setYear, setView, select, focusOn, stop, setStory, flyTo, autoSpan,
     caption: $('.hm-caption', root),
     polities: () => feats.map(f => f.properties.p),
     visiblePolities() {

@@ -160,7 +160,7 @@ registerTool('map', {
       items.sort((a, b) => EVENTS[a.i].year - EVENTS[b.i].year).forEach(c => {
         const e = EVENTS[c.i];
         const li = el(`<li><button type="button"><span class="y">${esc(yearLabel(e.year))}</span><span class="k ${esc(c.kind)}">${esc(dir === 'up' ? (CAUSE_KIND[c.kind] || '原因') : '結果')}</span><b>${esc(e.title)}</b><span class="w">${esc(c.why || '')}</span></button></li>`);
-        li.firstChild.addEventListener('click', () => { if (story) endStory(); map.setYear(e.year); map.select({ type: 'event', id: c.i }); map.flyTo(e.lon, e.lat, spanForEvent(e)); });
+        li.firstChild.addEventListener('click', () => { if (story) endStory(); map.setYear(e.year); map.select({ type: 'event', id: c.i }); map.flyTo(e.lon, e.lat, spanForEvent(e), null, undefined, true); });
         ul.appendChild(li);
       });
       return ul;
@@ -463,7 +463,9 @@ registerTool('map', {
         v = (s.span || 6) > 25 || !cands.length ? 'world' : cands[0][0];
       }
       syncHash(); renderSideNow();
-      map.flyTo(s.lon, s.lat, s.span || 6, v);
+      // まわりの町や地名の多さで寄り方を調節（物語の地点・進路は必ず画面に入れる）
+      const keep = [...(s.marks || []).map(m => [m.lon, m.lat]), ...(s.routes || []).flatMap(r => r.pts || []), ...(s.lines || []).flatMap(l => l.pts || [])].filter(p => p && isFinite(p[0]) && isFinite(p[1]));
+      map.flyTo(s.lon, s.lat, s.span || 6, v, undefined, keep);
       if (playing) schedule(); else if (SPEECH.on) setTimeout(() => { if (story && story.steps[si] === s) speakStep(s); }, 60);
     }
     function nextOrEnd() { if (!story) return; if (si < story.steps.length - 1) goStep(si + 1); else { playing = false; renderSideNow(); } }
