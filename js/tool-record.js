@@ -17,6 +17,7 @@ registerTool('record', {
         ${tile('最後まで見た物語', doneIds.size, STORIES.length)}
         ${tile('覚えた用語（★★★）', ok3, t3.length, `すべての用語では ${Object.keys(ok).length} / ${GLOSSARY.length}`)}
         ${tile('終えた授業', Object.keys(done).length, LESSONS.length)}
+        ${(() => { const C = store.get('cardBox', {}), now = Date.now(), dueN = Object.values(C).filter(o => o.due <= now).length; return `<div class="rec-tile"><div class="muted" style="font-size:12.5px">🃏 暗記カード</div><div class="big">${Object.keys(C).length}<small class="muted" style="font-size:14px"> 枚 学習</small></div><div class="muted" style="font-size:12.5px">今日の復習 ${dueN} 枚</div><a class="btn" style="margin-top:6px;text-decoration:none;display:inline-block" href="#cards">カードを開く</a></div>`; })()}
         <div class="rec-tile"><div class="muted" style="font-size:12.5px">クイズ</div><div class="big">${qn.length}<small class="muted" style="font-size:14px"> 回</small></div><div class="muted" style="font-size:12.5px">平均の正答率 ${avg}%</div>${wrong.length ? `<a class="btn" style="margin-top:6px;text-decoration:none;display:inline-block" href="#quiz/review">📝 復習 ${wrong.length}問</a>` : ''}</div>
       </div>
       <div class="card"><h3 style="margin-top:0">物語の種類ごと</h3><div class="rec-tiles kinds"></div></div>

@@ -1,12 +1,12 @@
 /* 画面の切りかえ（地図と年表／挑戦／授業モード）と、URL の # による直接リンク */
 const GROUPS = [
   { id: 'see', name: '地図と年表', secs: [['map', '🗺 歴史地図'], ['stories', '▶ 物語でたどる'], ['events', '出来事'], ['chrono', '年表'], ['ptl', '人物年表'], ['econ', '人口と経済'], ['people', '人物図鑑'], ['glossary', '用語集']] },
-  { id: 'try', name: '挑戦', secs: [['quiz', 'クイズ'], ['record', '📊 学習の記録']] },
+  { id: 'try', name: '挑戦', secs: [['quiz', 'クイズ'], ['cards', '🃏 暗記カード'], ['record', '📊 学習の記録']] },
   { id: 'class', name: '授業<span class="lbl">モード</span>', secs: [['lessons/sogo', '歴史総合'], ['lessons/tankyu', '世界史探究']] }
 ];
 
 // 地図に要らないデータ（物語・授業・画像・読み・用語・地形・経済）は、地図を出したあとで読みこむ
-const LATE_FILES = ["causes", "lessons-sogo", "lessons-tankyu", "stories", "stories-more", "stories-more2", "stories-people", "stories-people2", "stories-people3", "stories-people4", "stories-people5", "stories-themes","stories-terms-1","stories-terms-2","stories-terms-3","stories-terms-4","stories-terms-5","stories-terms-6", "story-talk", "people-detail", "event-fun", "images", "images-more", "images-more2","images-more3","images-more4", "yomi-auto", "yomi-1", "yomi-2", "yomi-3", "yomi-4", "yomi-5", "yomi-6", "yomi-7", "yomi-8", "yomi-9", "glossary-1", "glossary-2", "glossary-3", "glossary-4", "terrain", "econ"];
+const LATE_FILES = ["causes", "lessons-sogo", "lessons-tankyu", "stories", "stories-more", "stories-more2", "stories-people", "stories-people2", "stories-people3", "stories-people4", "stories-people5", "stories-themes","stories-terms-1","stories-terms-2","stories-terms-3","stories-terms-4","stories-terms-5","stories-terms-6", "story-talk", "people-detail", "event-fun", "images", "images-more", "images-more2","images-more3","images-more4","images-more5", "yomi-auto", "yomi-1", "yomi-2", "yomi-3", "yomi-4", "yomi-5", "yomi-6", "yomi-7", "yomi-8", "yomi-9", "glossary-1", "glossary-2", "glossary-3", "glossary-4", "terrain", "econ"];
 let lateReady = false;
 function loadLate() {
   let left = LATE_FILES.length;
