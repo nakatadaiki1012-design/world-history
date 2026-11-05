@@ -100,7 +100,9 @@ h1, h2, h3, h4 { font-family: var(--font-display); line-height: 1.35; }
 @media (max-width: 720px) {
   .brand small, .lbl { display: none; }
   .brand { font-size: 18px; }
-  .grpnav .g { padding: 4px 10px; font-size: 13px; }
+  .grpnav .g { padding: 4px 9px; font-size: 12.5px; }
+  .brand { font-size: 16px; }
+  .top-row .icon-btn { padding: 4px 8px; }
   .top-row { gap: 6px; }
   .top { padding-top: 6px; padding-bottom: 6px; }
 }
@@ -487,6 +489,8 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .cap-ctl .pl { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 46px; }
 .cap-ctl button.on { background: #ffd76a; color: #2a2010; border-color: #ffd76a; }
 .cap-ctl [data-a=end] { margin-left: auto; }
+.cap-ctl button { white-space: nowrap; flex: none; }
+@media (max-width: 520px) { .cap-ctl { gap: 4px; } .cap-ctl button { padding: 4px 8px; font-size: 13px; } .cap-ctl .pl { min-width: 40px; } }
 .cap-bar { height: 3px; margin: 0 -13px; background: rgba(255,255,255,.12); }
 .cap-bar i { display: block; height: 100%; width: 0; background: #ffd76a; }
 .cap-bar i.busy { width: 30%; animation: capbusy 1.4s ease-in-out infinite alternate; }
