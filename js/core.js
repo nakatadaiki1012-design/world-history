@@ -68,6 +68,9 @@ const EVENT_FUN = {};
 const ERA_BINS = [[-9999, 500, '古代'], [500, 1500, '中世'], [1500, 1800, '近世'], [1800, 1914, '近代'], [1914, 9999, '現代']];
 const eraOf = y => (ERA_BINS.find(b => y >= b[0] && y < b[1]) || ERA_BINS[0])[2];
 const STORY = {};
+// 教室のスクリーン用の大きな文字（ページ全体の設定）
+function setBigText(on) { store.set('bigText', !!on); document.documentElement.classList.toggle('big', !!on); window.dispatchEvent(new Event('bigtext')); }
+if (store.get('bigText', false)) document.documentElement.classList.add('big');
 const STORY_KIND = { event: 'できごと', person: '人物', theme: 'テーマ', term: '用語' };
 // 用語の物語の分類（kind: 'term' の tcat）
 const TERM_STORY_CAT = ['法律・制度', '土地制度', '条約・宣言', '書物', '建物・遺跡', '出来事', '経済・社会', '思想・宗教'];

@@ -575,6 +575,21 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .tour-btns { display: flex; align-items: center; gap: 8px; }
 .tour-btns .nx { margin-left: auto; }
 .tour-n { font-size: 12.5px; }
+/* 教室のスクリーン用：説明の文字を大きく（地図の文字は地図の中で大きくする） */
+html.big .side, html.big .lesson-text, html.big .term-card, html.big .prof-card, html.big .cplay, html.big .qbox { zoom: 1.22; }
+html.big .hm-caption { font-size: 118%; }
+/* 印刷：ボタンなどを消して、地図と説明だけ */
+@media print {
+  #top, .subnav, .hm-tools, .hm-views, .hm-set, .hm-tip, .cap-ctl, .cap-bar, .hm-inset, .tabs, .st-ctl, .ttsrow, .backlink, .tour, .sr-ov, #installBtn { display: none !important; }
+  body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  main { padding: 0; }
+  .mapview { display: block; height: auto; }
+  .mapbox { height: 150mm; }
+  .side { margin-top: 6mm; border: 0; box-shadow: none; max-height: none; overflow: visible; }
+  .hm { border: 1px solid #999; }
+  .hm-bar .hm-row > :not(.yr) { display: none; }
+  .pcard, .evrow, .gl-item { content-visibility: visible; break-inside: avoid; }
+}
 .qreview { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .rec { max-width: 1000px; margin: 0 auto; display: grid; gap: 12px; }
 .rec-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }

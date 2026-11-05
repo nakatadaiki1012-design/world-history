@@ -35,6 +35,8 @@ function createHistMap(host, opts = {}) {
         <div class="hm-set-g"><b>画面</b>
           <label><input type="checkbox" data-u="views"> 地域のボタン</label>
           ${opts.bar === false ? '' : '<label><input type="checkbox" data-u="eras"> 年のジャンプボタン</label>'}
+          <label><input type="checkbox" class="big-ck"> 大きな文字（教室のスクリーン用）</label>
+          <button type="button" class="chip print-btn" style="margin-top:4px">🖨 この地図を印刷</button>
         </div>
         <div class="hm-set-g"><b>🔊 読み上げ</b>
           <label style="display:grid;gap:2px">声<select class="tts-voice"></select></label>
@@ -201,7 +203,7 @@ function createHistMap(host, opts = {}) {
     if (w === st.w && h === st.h) return;
     st.w = w; st.h = h;
     // 文字の大きさを地図の大きさに合わせる（スマホは小さめ、プロジェクターや大きな画面では大きく）
-    st.ls = clamp(Math.min(w / 1000, h / 620), 0.82, 1.7);
+    st.ls = clamp(Math.min(w / 1000, h / 620), 0.82, 1.7) * (document.documentElement.classList.contains('big') ? 1.35 : 1);   // 教室用の大きな文字なら、さらに大きく
     root.style.setProperty('--ls', st.ls.toFixed(3));
     mcache.clear();
     svg.attr('viewBox', `0 0 ${w} ${h}`);
@@ -866,6 +868,12 @@ function createHistMap(host, opts = {}) {
     tip.style.top = Math.max(4, y - tip.offsetHeight - 10) + 'px';
   }
   function hideTip() { tip.hidden = true; }
+  // 大きな文字・印刷
+  { const bk = $('.big-ck', root); if (bk) { bk.checked = document.documentElement.classList.contains('big');
+      bk.addEventListener('change', () => { setBigText(bk.checked); }); }
+    const pb = $('.print-btn', root); if (pb) pb.addEventListener('click', () => { const sb = $('.hm-set', root); if (sb) sb.hidden = true; setTimeout(() => window.print(), 50); }); }
+  const onBig = () => { st.w = 0; resize(); };
+  window.addEventListener('bigtext', onBig);
   // スマホでは指が「はなれた」ことがわからないので、どこかをタップしたら一度消す（地名をタップしたときは、そのあとで出し直す）
   const onDown = () => hideTip();
   document.addEventListener('pointerdown', onDown, true);
@@ -1167,6 +1175,6 @@ function createHistMap(host, opts = {}) {
     },
     people: () => shownPeople.filter(x => !x.ghost),
     events: () => shownEvents,
-    destroy() { stop(); ro.disconnect(); document.removeEventListener('pointerdown', onDown, true); window.removeEventListener('lateready', onLate); root.remove(); }
+    destroy() { stop(); ro.disconnect(); window.removeEventListener('bigtext', onBig); document.removeEventListener('pointerdown', onDown, true); window.removeEventListener('lateready', onLate); root.remove(); }
   };
 }
