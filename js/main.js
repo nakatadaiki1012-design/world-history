@@ -91,7 +91,11 @@ window.addEventListener('hashchange', route);
 window.addEventListener('resize', setTopHeight);
 route();
 // 地図をかき終えてから、残りを読みこむ
-requestAnimationFrame(() => setTimeout(loadLate, 30));
+// 地図の画面なら、地図を描き終えてから（描く前に重い読みこみが割りこまないように）。ほかの画面ならすぐ
+let lateStarted = false;
+const startLate = () => { if (lateStarted) return; lateStarted = true; setTimeout(loadLate, 30); };
+if (/^#?(map|$)/.test(location.hash.replace(/^#/, '')) || !location.hash) { window.addEventListener('mapdrawn', startLate, { once: true }); setTimeout(startLate, 4000); }
+else startLate();
 
 // オフラインでも使えるように（ホーム画面に追加したアプリとしても動く）。ファイルを直接開いたときは使わない
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {

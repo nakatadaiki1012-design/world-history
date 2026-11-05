@@ -303,7 +303,7 @@ function createHistMap(host, opts = {}) {
   let relTok = 0, relTimer = null, relUrl = null;
   function scheduleRelief(now) {
     clearTimeout(relTimer);
-    relTimer = setTimeout(renderRelief, now ? 30 : 160);
+    relTimer = setTimeout(renderRelief, now ? (drawnOnce ? 30 : 700) : 160);   // 最初は、地図を出してから影をつける
   }
   async function renderRelief() {
     if (opts.mini || !st.layers.terrain || typeof RELIEF === 'undefined' || !pr) { gRel.selectAll('*').remove(); return; }
@@ -458,8 +458,10 @@ function createHistMap(host, opts = {}) {
   }
 
   let feats = [], shownPeople = [], shownEvents = [];
+  let drawnOnce = false;
   function draw() {
     if (!pr) return;
+    if (!drawnOnce) { drawnOnce = true; requestAnimationFrame(() => window.dispatchEvent(new Event('mapdrawn'))); }
     const y = st.year;
     feats = GEO.politiesAt(y);
     // 勢力圏（斜線）
