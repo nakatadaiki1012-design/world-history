@@ -7,12 +7,33 @@ const GROUPS = [
 
 // 地図に要らないデータ（物語・授業・画像・読み・用語・地形・経済）は、地図を出したあとで読みこむ
 const LATE_FILES = ["causes", "lessons-sogo", "lessons-tankyu", "stories", "stories-more", "stories-more2", "stories-people", "stories-people2", "stories-people3", "stories-people4", "stories-people5", "stories-themes","stories-terms-1","stories-terms-2","stories-terms-3","stories-terms-4","stories-terms-5","stories-terms-6", "story-talk", "people-detail", "event-fun", "images", "images-more", "images-more2","images-more3","images-more4","images-more5", "yomi-auto", "yomi-1", "yomi-2", "yomi-3", "yomi-4", "yomi-5", "yomi-6", "yomi-7", "yomi-8", "yomi-9", "glossary-1", "glossary-2", "glossary-3", "glossary-4", "terrain", "econ"];
-let lateReady = false;
-function loadLate() {
-  let left = LATE_FILES.length;
-  const done = () => { if (--left > 0) return; absorbLate(); lateReady = true; window.dispatchEvent(new Event('lateready')); if (waitingRoute) { waitingRoute = false; route(); } };
-  LATE_FILES.forEach(f => { const sc = document.createElement('script'); sc.src = `js/data/${f}.js`; sc.async = false; sc.onload = sc.onerror = done; document.head.appendChild(sc); });
+// 2つに分けて読む：ふつうのデータ（用語・画像・読みなど）は地図のすぐあと、物語（いちばん大きい）は必要になったときに
+const STORY_FILES = LATE_FILES.filter(f => /^stor/.test(f)), BASE_FILES = LATE_FILES.filter(f => !/^stor/.test(f));
+let lateReady = false, baseReady = false, storiesReady = false, storiesP = null;
+function loadFiles(list, cb) {
+  let left = list.length; if (!left) { cb(); return; }
+  const done = () => { if (--left === 0) cb(); };
+  list.forEach(f => { const sc = document.createElement('script'); sc.src = `js/data/${f}.js`; sc.async = false; sc.onload = sc.onerror = done; document.head.appendChild(sc); });
 }
+function lateArrived() {
+  absorbLate(); lateReady = baseReady && storiesReady;
+  window.dispatchEvent(new Event('lateready'));
+  if (waitingRoute && lateReady) { waitingRoute = false; route(); }
+}
+function loadLate() {
+  if (baseReady || loadLate.started) return; loadLate.started = true;
+  loadFiles(BASE_FILES, () => {
+    baseReady = true; lateArrived();
+    // パソコンなど力のある端末は、少ししてから物語も先に読んでおく（スマホは使うときに）
+    if (!isPhone() && !/Mobi|Android/i.test(navigator.userAgent)) setTimeout(() => { if (window.requestIdleCallback) requestIdleCallback(() => ensureStories(), { timeout: 4000 }); else ensureStories(); }, 1500);
+  });
+}
+function ensureStories() {
+  if (storiesP) return storiesP;
+  storiesP = new Promise(res => loadFiles(STORY_FILES, () => { storiesReady = true; if (baseReady) lateArrived(); res(); }));
+  return storiesP;
+}
+window.ensureStories = ensureStories;
 let waitingRoute = false;
 
 // 上の切りかえボタン。スマホでは、えらんだ組の中のボタン（出来事・年表…）を2段目に横いっぱいに並べる
@@ -66,7 +87,7 @@ function route() {
   const main = $('#main');
   main.innerHTML = '';
   if (!lateReady && id !== 'map') {
-    current = null; waitingRoute = true;
+    current = null; waitingRoute = true; loadLate(); ensureStories();
     main.appendChild(el('<p class="loading" style="text-align:center;margin-top:30vh;color:var(--muted)">物語や用語のデータを読みこんでいます…</p>'));
     setTopHeight(); return;
   }

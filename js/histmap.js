@@ -269,8 +269,8 @@ function createHistMap(host, opts = {}) {
     })();
   }
   // 地形などのデータがあとから届いたら、かき直す
-  function onLate() { if (pr) { drawStatic(); requestDraw(); } }
-  window.addEventListener('lateready', onLate);
+  function onLate() { if (pr) { buildTerrain(); requestDraw(); } }   // 地形の層だけ作る（土台はかき直さない）
+  window.addEventListener('lateready', onLate, { once: true });   // 地形が届いたら1回だけかき直す
   function buildBase() {
     pr = GEO.projection(st.view, st.w, st.h);
     labelCache.clear();

@@ -73,6 +73,8 @@ function openTerm(t) {
   const bt = $('.term-btns', ov);
   // この用語の物語があれば、いちばん目立つ所に
   const tst = typeof termStoryOf === 'function' && termStoryOf(t);
+  // 物語をまだ読んでいなければ、読んでからボタンを足す
+  if (!tst && !STORIES.length && window.ensureStories) ensureStories().then(() => { const s2 = termStoryOf(t); if (s2 && ov.isConnected) { const a = el(`<a class="btn primary term-story" href="#story/${esc(s2.id)}/1">▶ 物語で学ぶ（${s2.steps.length}場面）</a>`); a.addEventListener('click', close); bt.insertBefore(a, bt.firstChild); } });
   if (tst) { const a = el(`<a class="btn primary term-story" href="#story/${esc(tst.id)}/1">▶ 物語で学ぶ（${tst.steps.length}場面）</a>`); a.addEventListener('click', close); bt.appendChild(a); }
   bt.appendChild(speakBtn(() => `${t}。${g.def}`));
   const ok = el(`<button type="button" class="chip">${termMastered()[t] ? '✅ 覚えた' : '☐ 覚えた'}</button>`);

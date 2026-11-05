@@ -16,7 +16,7 @@ const RELIEF = (() => {
       const im = new Image();
       im.onload = () => {
         const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
-        const x = c.getContext('2d'); x.drawImage(im, 0, 0);
+        const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(im, 0, 0);
         const d = x.getImageData(0, 0, im.width, im.height).data;
         const g = new Uint8Array(im.width * im.height);
         for (let i = 0; i < g.length; i++) g[i] = d[i * 4];

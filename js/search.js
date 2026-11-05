@@ -29,6 +29,7 @@
   const ICON = { '用語': '📘', '物語': '▶', '人物': '👤', '出来事': '◆', '国・王朝': '🏳', '地名': '📍' };
   function open() {
     if ($('.sr-ov')) return;
+    if (window.ensureStories) ensureStories();   // 物語も探せるように（まだなら読みはじめる）
     const ov = el(`<div class="sr-ov" role="dialog" aria-label="まとめて探す"><div class="sr-card">
       <div class="sr-head"><input type="search" class="sr-in" placeholder="用語・人物・物語・出来事・国・地名（読みでもOK）" autocomplete="off"><button type="button" class="prof-x" aria-label="とじる">✕</button></div>
       <div class="sr-res"><p class="muted" style="font-size:13px">例：きんでん、ナポレオン、ウェストファリア、長安、ルネサンス</p></div></div></div>`);
