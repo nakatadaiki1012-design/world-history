@@ -203,7 +203,7 @@ function createHistMap(host, opts = {}) {
     if (w === st.w && h === st.h) return;
     st.w = w; st.h = h;
     // 文字の大きさを地図の大きさに合わせる（スマホは小さめ、プロジェクターや大きな画面では大きく）
-    st.ls = clamp(Math.min(w / 1000, h / 620), 0.82, 1.7) * (document.documentElement.classList.contains('big') ? 1.35 : 1);   // 教室用の大きな文字なら、さらに大きく
+    st.ls = clamp(Math.min(w / 1000, h / 620), 0.96, 1.7) * (document.documentElement.classList.contains('big') ? 1.35 : 1);   // 教室用の大きな文字なら、さらに大きく
     root.style.setProperty('--ls', st.ls.toFixed(3));
     mcache.clear();
     svg.attr('viewBox', `0 0 ${w} ${h}`);
@@ -590,7 +590,7 @@ function createHistMap(host, opts = {}) {
       }
     }
     // 人物の点（近すぎるものは輪のように広げる）
-    const ppl = shownPeople.map(x => {
+    let ppl = shownPeople.map(x => {
       const q = pr([x.pl.lon, x.pl.lat]); if (!q) return null;
       const [sx, sy] = t.apply(q); return Object.assign({ sx, sy, ox: sx, oy: sy, r: PORTRAITS[x.p.id] ? 12.5 : 6 }, x);
     }).filter(x => x && inView(x.sx, x.sy));
@@ -601,10 +601,17 @@ function createHistMap(host, opts = {}) {
       ppl.forEach((y, j) => { if (j > i && !used.has(j) && Math.hypot(x.ox - y.ox, x.oy - y.oy) < 18) grp.push(j); });
       if (grp.length < 2) return;
       grp.forEach(j => used.add(j));
+      // 1か所に集まりすぎたら、輪にするのは大事な人から MAX 人まで（のこりは寄ると出る）。物語の人物は全部出す
+      const MAX = st.story ? 99 : st.k < 3 ? 6 : 9;
+      if (grp.length > MAX) {
+        grp.sort((a, b) => (isSelP(ppl[b].p.id) - isSelP(ppl[a].p.id)) || ((PORTRAITS[ppl[b].p.id] ? 1 : 0) - (PORTRAITS[ppl[a].p.id] ? 1 : 0)) || ((ppl[b].p.text || '').length - (ppl[a].p.text || '').length));
+        grp.splice(MAX).forEach(j => { ppl[j].hide = true; });
+      }
       const n = grp.length, rr = Math.max(16, 14 / Math.sin(Math.PI / n));
       const cx = d3.mean(grp, j => ppl[j].ox), cy = d3.mean(grp, j => ppl[j].oy);
       grp.forEach((j, k) => { const a = -Math.PI / 2 + 2 * Math.PI * k / n; ppl[j].sx = cx + rr * Math.cos(a); ppl[j].sy = cy + rr * Math.sin(a); ppl[j].spread = true; });
     });
+    ppl = ppl.filter(x => !x.hide);
     ppl.forEach(x => boxes.push([x.sx - x.r, x.sy - x.r, x.sx + x.r, x.sy + x.r]));
 
     // 歴史的な地名（その年の名前で。都と同じ場所なら、都の名前のかわりにこちらを出す）
@@ -711,7 +718,8 @@ function createHistMap(host, opts = {}) {
       const k = st.k, S = st.ls || 1;
       T.regions.forEach(f => {
         const p = f.properties; if (!TCLS[p.c] || !p.n) return;
-        if (p.r > (k < 2 ? 2 : k < 4 ? 3 : k < 8 ? 4 : 5)) return;
+        if (p.r > (k < 2 ? 1 : k < 4 ? 3 : k < 8 ? 4 : 5)) return;   // 引きの地図では、いちばん大きな山脈・砂漠だけ
+        if (f.lab[1] < -60) return;   // 南極は出さない
         const q = pr(f.lab); if (!q) return; const [x, y] = t.apply(q); if (!inView(x, y)) return;
         const w = textW(p.n, 11.5 * S, false) * 1.15, h = 13 * S;
         jobs.push({ pri: 8.2, sub: p.r, run: () => { const b = [x - w / 2, y - h / 2, x + w / 2, y + h / 2]; if (!hit(b)) { boxes.push(b); tlabs.push({ cls: 'tl-' + TCLS[p.c], n: p.n, x, y, a: 'middle' }); } } });
