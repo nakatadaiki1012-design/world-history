@@ -567,6 +567,14 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .cplay .cbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .cplay .cbtns .btn { padding: 12px 6px; font-size: 15px; }
 .cplay .clinks { margin-top: 10px; justify-content: center; }
+.tour { position: fixed; inset: 0; z-index: 70; }
+.tour-hole { position: fixed; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(10,8,5,.6); transition: all .3s; pointer-events: none; outline: 3px solid #ffd76a; }
+.tour-tip { position: fixed; background: var(--panel); color: var(--ink); border-radius: 14px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(0,0,0,.35); transition: top .3s, left .3s; }
+.tour-tip .tt { font-size: 16px; }
+.tour-tip p { margin: 6px 0 10px; font-size: 14.5px; line-height: 1.7; }
+.tour-btns { display: flex; align-items: center; gap: 8px; }
+.tour-btns .nx { margin-left: auto; }
+.tour-n { font-size: 12.5px; }
 .qreview { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .rec { max-width: 1000px; margin: 0 auto; display: grid; gap: 12px; }
 .rec-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
@@ -674,6 +682,7 @@ a.term:hover { color: var(--ai); background: color-mix(in srgb, var(--ai) 10%, t
 <script src="js/tool-cards.js"></script>
 <script src="js/tool-record.js"></script>
 <script src="js/search.js"></script>
+<script src="js/tour.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
