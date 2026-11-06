@@ -19,11 +19,11 @@ registerTool('cards', {
       box.innerHTML = '';
       const s = el(`<div class="card setup">
         <h2 style="margin:0">🃏 暗記カード</h2>
-        <p class="muted" style="font-size:13.5px;margin:4px 0 10px">おすと裏返ります。覚えたカードは、だんだん間をあけて出てきます（1・3・7・14・30日後）。</p>
+        <p class="muted" style="font-size:13.5px;margin:4px 0 8px">おすと裏返ります。覚えたカードは、だんだん間をあけて出てきます（1・3・7・14・30日後）。「✕」のカードは、その回の最後にもう一度出ます。</p>
+        <button type="button" class="btn primary go" style="margin-bottom:8px">はじめる</button>
         <div class="crow"><b>重要度</b></div><div class="crow"><b>科目</b></div><div class="crow"><b>表に出すもの</b></div><div class="crow"><b>枚数</b></div>
         <div class="lf-bar" style="margin:6px 0 10px"></div>
         <div class="cstat"></div>
-        <button type="button" class="btn primary go">はじめる</button>
       </div>`);
       const rows = $$('.crow', s);
       const chips = (row, items, key) => items.forEach(([v, n]) => {

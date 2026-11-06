@@ -66,6 +66,9 @@ function nearPlace(lon, lat, d = 0.35) {
 }
 const EVENT_FUN = {};
 const ERA_BINS = [[-9999, 500, '古代'], [500, 1500, '中世'], [1500, 1800, '近世'], [1800, 1914, '近代'], [1914, 9999, '現代']];
+// 世紀（前1世紀＝-1、1世紀＝1）
+const centOf = y => (y > 0 ? Math.ceil(y / 100) : -Math.ceil(-y / 100 || 1));
+const centLabel = c => (c > 0 ? `${c}世紀` : `前${-c}世紀`);
 const eraOf = y => (ERA_BINS.find(b => y >= b[0] && y < b[1]) || ERA_BINS[0])[2];
 const STORY = {};
 // 教室のスクリーン用の大きな文字（ページ全体の設定）

@@ -34,6 +34,8 @@ registerTool('people', {
       const c = course.value;
       const ps = PEOPLE.filter(p => (!reg || p.region === reg) && (!c || (p.tags || []).includes(c)) &&
         (!s || [p.name, p.kana, p.role, p.text, (p.keys || []).join(' '), p.polity && POLITY[p.polity] ? POLITY[p.polity].name : ''].join(' ').includes(s)));
+      // 名前やよみに入っているものを先に（説明に出てくるだけの人はあと）
+      if (s) ps.sort((a, b) => ((b.name + (b.kana || '')).includes(s) - (a.name + (a.kana || '')).includes(s)));
       cnt.textContent = `${ps.length}人`;
       grid.innerHTML = '';
       if (!ps.length) grid.appendChild(el('<p class="empty">見つかりませんでした。</p>'));

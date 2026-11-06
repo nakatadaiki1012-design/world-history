@@ -35,7 +35,8 @@
       <div class="sr-res"><p class="muted" style="font-size:13px">例：きんでん、ナポレオン、ウェストファリア、長安、ルネサンス</p></div></div></div>`);
     document.body.appendChild(ov);
     const inp = $('.sr-in', ov), res = $('.sr-res', ov);
-    const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+    const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); window.removeEventListener('hashchange', close); };
+    window.addEventListener('hashchange', close);   // 画面が変わったら閉じる（用語の窓から物語へ移ったときなど）
     const onKey = e => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', onKey);
     ov.addEventListener('click', e => { if (e.target === ov) close(); });

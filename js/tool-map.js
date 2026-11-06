@@ -47,10 +47,14 @@ registerTool('map', {
     // 年の保存と URL の書きかえも、少しまとめてから
     let ySaveT = null;
     function yearSave(y) { clearTimeout(ySaveT); ySaveT = setTimeout(() => { store.set('year', y); syncHash(); }, 250); }
+    let lastSelKey = '';
     function renderSideNow() {
       const s = map.sel;
       renderTabs(!!s || !!story);
       body.innerHTML = '';
+      // ちがうものをえらんだら、説明はいちばん上から
+      const sk = s ? s.type + ':' + s.id : story ? 'story:' + story.id : tab;
+      if (sk !== lastSelKey) { body.scrollTop = 0; lastSelKey = sk; }
       if (story) return storyPanel();
       if (s && s.type === 'polity' && POLITY[s.id]) return polityDetail(POLITY[s.id]);
       if (s && s.type === 'person' && PERSON[s.id]) return personDetail(PERSON[s.id]);
@@ -429,9 +433,17 @@ registerTool('map', {
       $$('.cap-ctl button', cap).forEach(b => b.addEventListener('click', e => { e.stopPropagation(); storyCtl(b.dataset.a); }));
       cap.onclick = null;   // 画像をおすと大きく（document の処理に任せる）
       cap.onpointerdown = e => e.stopPropagation();
+      // 文が3行に入りきらないときは下をうすく。テロップにさわったら、自動で進むのを少し待つ
+      const ctx = $('.cap-text', cap);
+      if (ctx) {
+        requestAnimationFrame(() => ctx.classList.toggle('more', ctx.scrollHeight > ctx.clientHeight + 4));
+        ctx.addEventListener('scroll', () => ctx.classList.toggle('more', ctx.scrollTop + ctx.clientHeight < ctx.scrollHeight - 4), { passive: true });
+        const hold = () => { ctx.dataset.touched = '1'; if (playing && !SPEECH.on) { clearTimeout(stTimer); stTimer = setTimeout(nextOrEnd, 12000); const b = $('.cap-bar i', cap); if (b) { b.style.transition = 'none'; b.style.width = '0'; requestAnimationFrame(() => requestAnimationFrame(() => { b.style.transition = 'width 12000ms linear'; b.style.width = '100%'; })); } } };
+        ctx.addEventListener('pointerdown', hold); ctx.addEventListener('wheel', hold, { passive: true });
+      }
       // 残り時間のバー（読み上げ中は、読みおわるまで）
       const bar = $('.cap-bar i', cap);
-      if (playing && !SPEECH.on) { const ms = 5200 + (s.text || '').length * 45; bar.style.transition = `width ${ms}ms linear`; requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = '100%'; })); }
+      if (playing && !SPEECH.on) { const ms = 6000 + stepBody(s).length * 110; bar.style.transition = `width ${ms}ms linear`; requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = '100%'; })); }
       else if (playing) bar.classList.add('busy');
       else bar.style.width = '100%';
     }
@@ -489,8 +501,16 @@ registerTool('map', {
         return;
       }
       SPEECH.stop();
-      const ms = 5200 + stepBody(s).length * 45;
+      // 声なし：文の長さに合わせて、読める時間をとる（高校生がゆっくり読める速さ）。テロップの文も時間に合わせて下へ送る
+      const ms = 6000 + stepBody(s).length * 110;
       stTimer = setTimeout(nextOrEnd, ms);
+      const t0 = performance.now(), tx = $('.cap-text', map.root);
+      if (tx) (function roll() {
+        if (story !== S || !playing || !tx.isConnected) return;
+        const f = Math.min(1, Math.max(0, ((performance.now() - t0) / ms - 0.25) / 0.65));
+        if (!tx.dataset.touched) tx.scrollTop = f * (tx.scrollHeight - tx.clientHeight);
+        if (f < 1) setTimeout(roll, 400);
+      })();
     }
     function storyPanel() {
       const s = story.steps[si];

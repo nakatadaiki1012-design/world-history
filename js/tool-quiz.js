@@ -196,14 +196,14 @@ registerTool('quiz', {
         const q = make(cfg.types[i % cfg.types.length === 0 ? Math.floor(Math.random() * cfg.types.length) : Math.floor(Math.random() * cfg.types.length)]);
         if (q && !qs.some(x => x.q === q.q)) qs.push(q);
       }
-      let i = 0, score = 0, streak = 0;
+      let i = 0, score = 0, streak = 0; const misses = [];
       function show() {
         if (mini) { mini.destroy(); mini = null; }
         box.innerHTML = '';
         if (i >= qs.length) return result();
         const q = qs[i];
         const card = el(`<div class="card qbox">
-          <div class="qmeta"><span>${i + 1} / ${qs.length}</span><span>${streak >= 2 ? `🔥 ${streak}問連続` : ''} 正解 ${score}</span></div>
+          <div class="qmeta"><span>${review ? '📝 復習　' : ''}${i + 1} / ${qs.length}</span><span>${streak >= 2 ? `🔥 ${streak}問連続` : ''} 正解 ${score}</span></div>
           ${q.map ? '<div class="qmap"></div>' : ''}
           <h2>${q.q}</h2>
           <div class="qchoices"></div>
@@ -220,7 +220,7 @@ registerTool('quiz', {
           b.addEventListener('click', () => {
             if (ch.dataset.done) return; ch.dataset.done = '1';
             const ok = k === q.a;
-            if (ok) { score++; streak++; removeWrong(q); } else { streak = 0; addWrong(q); }
+            if (ok) { score++; streak++; removeWrong(q); } else { streak = 0; addWrong(q); misses.push(q); }
             $$('button', ch).forEach((x, j) => { if (j === q.a) x.classList.add('ok'); else if (j === k) x.classList.add('ng'); });
             const res = el(`<div class="qres"><span class="mark" style="color:${ok ? 'var(--ok)' : 'var(--ng)'}">${ok ? '◯' : '✕'}</span>${esc(q.exp)}</div>`);
             const links = el('<div class="keys" style="margin-top:8px"></div>');
@@ -234,6 +234,8 @@ registerTool('quiz', {
             nx.addEventListener('click', () => { i++; show(); });
             $('.qnext', card).appendChild(nx);
             nx.focus({ preventScroll: true });
+            // 説明と「次へ」が見えるところまで送る（スマホで毎回スクロールしなくてよいように）
+            requestAnimationFrame(() => nx.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
           });
           ch.appendChild(b);
         });
@@ -247,10 +249,11 @@ registerTool('quiz', {
         const r = el(`<div class="card qbox" style="text-align:center">
           <div class="score">${score} / ${qs.length}</div>
           <div style="font-size:30px;color:#d4a017">${stars}</div>
-          <p>${score === qs.length ? 'パーフェクト！' : 'まちがえた問題は「まちがえた問題を復習」で、もう一度とけます。'}</p>
+          <p>${score === qs.length ? 'パーフェクト！' : 'まちがえた問題は「📝 復習」で、もう一度とけます。'}</p>
+          ${misses.length ? `<div class="qmiss"><b>まちがえた問題</b><ol>${misses.map(m => `<li><span class="qq">${esc(m.q.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90))}</span><br><span class="qa">正解：${esc(m.c[m.a])}</span></li>`).join('')}</ol></div>` : ''}
           <button type="button" class="btn primary">もう一度</button> <button type="button" class="btn">設定にもどる</button>
           ${wrongList().length ? `<button type="button" class="btn rv2">📝 復習（${wrongList().length}問）</button>` : ''}
-          <div style="margin-top:10px"><a href="#record" style="font-size:13.5px">📊 学習の記録を見る</a></div>
+          <div style="margin-top:10px"><a class="chip" href="#record">📊 学習の記録を見る</a></div>
         </div>`);
         const bs = $$('button', r);
         bs[0].addEventListener('click', () => start(review)); bs[1].addEventListener('click', setup);

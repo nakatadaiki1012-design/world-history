@@ -792,7 +792,16 @@ function createHistMap(host, opts = {}) {
     const ps2 = gPlc.selectAll('g').data(plc, d => d.pl.id);
     ps2.exit().remove();
     const pe2 = ps2.enter().append('g').attr('class', 'hm-plc')
-      .on('click', (ev, d) => { ev.stopPropagation(); const [mx, my] = d3.pointer(ev, svgEl); const cur = gPlc.selectAll('g.hm-plc').data(); let best = d, bd = Math.hypot(d.x - mx, d.y - my); cur.forEach(o => { const dd = Math.hypot(o.x - mx, o.y - my); if (dd < bd - 0.5) { bd = dd; best = o; } }); select({ type: 'place', id: best.pl.id }); })
+      .on('click', (ev, d) => {
+        ev.stopPropagation();
+        // 名前の文字をおしたら、その地名。点（◆）をおしたときだけ、重なった点のうち指にいちばん近いもの（10px 以内）
+        if (ev.target.tagName !== 'text') {
+          const [mx, my] = d3.pointer(ev, svgEl); let best = d, bd = Math.hypot(d.x - mx, d.y - my);
+          gPlc.selectAll('g.hm-plc').data().forEach(o => { const dd = Math.hypot(o.x - mx, o.y - my); if (dd < bd - 0.5 && dd < 10) { bd = dd; best = o; } });
+          d = best;
+        }
+        select({ type: 'place', id: d.pl.id });
+      })
       .on('mousemove', (ev, d) => showTip(ev, `<b>${esc(d.name)}</b>${(() => { const m = d.pl.modern; if (!m || m === d.name) return ''; const r = m.startsWith(d.name) ? m.slice(d.name.length).replace(/^（(.*)）$/, '$1') : m; return r ? `（今の${esc(r)}）` : ''; })()}<br><span style="font-size:12px">${esc(d.pl.text || '')}</span>`))
       .on('mouseleave', hideTip);
     pe2.append('line').attr('class', 'lead');

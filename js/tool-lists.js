@@ -19,7 +19,7 @@ function listFilters(box, key, opts, onChange) {
   // のこりの条件は、1行のセレクト（スマホでも場所をとらない）
   const bar = el('<div class="lf-bar"></div>');
   if (opts.search) {
-    const inp = el('<input type="search" class="lf-q" placeholder="🔍 さがす（例：茶、ペスト）">');
+    const inp = el('<input type="search" class="lf-q" placeholder="🔍 さがす（例：茶、ペスト、1600）">');
     inp.value = st.q;
     inp.addEventListener('input', () => { st.q = inp.value.trim(); save(); });
     bar.appendChild(inp);
@@ -36,6 +36,7 @@ function listFilters(box, key, opts, onChange) {
   sel('region', [['', '地域：すべて'], ...REGIONS.map(r => [r.id, r.name])], '地域');
   sel('era', [['', '時代：すべて'], ...ERA_BINS.map(b => [b[2], b[2]])], '時代');
   if (opts.kinds) sel('kind', [['', '種類：すべて'], ...Object.entries(KIND)], '種類');
+  if (opts.kinds) { const cs = [...new Set(EVENTS.filter(e => !st.era || eraOf(e.year) === st.era).map(e => centOf(e.year)))].sort((a, b) => a - b); sel('cent', [['', '世紀：すべて'], ...cs.map(c => [String(c), centLabel(c)])], '世紀'); }
   sel('course', [['', '科目：すべて'], ['sogo', '歴史総合'], ['tankyu', '世界史探究']], '科目');
   sel('sort', [['year', '古い順'], ['year-desc', '新しい順'], ['region', '地域ごと']], '並べかえ');
   box.appendChild(bar);
@@ -55,12 +56,13 @@ registerTool('stories', {
     main.appendChild(f); main.appendChild(cnt); main.appendChild(grid);
     listFilters(f, 'storyFilter', { storyKinds: true, search: true }, st => {
       const ss = STORIES.filter(s => (!st.skind || storyKind(s) === st.skind) && (!st.theme || s.theme === st.theme) && (!st.tcat || s.tcat === st.tcat) && (!st.q || (s.title + (s.term || '') + (s.summary || '')).includes(st.q)) && (!st.region || s.region === st.region) && (!st.era || eraOf(s.steps[0].year) === st.era) && (!st.course || (s.tags || []).includes(st.course)));
-      ss.sort((a, b) => st.sort === 'region' ? regionIndex(a.region) - regionIndex(b.region) || a.steps[0].year - b.steps[0].year : (st.sort === 'year-desc' ? -1 : 1) * (a.steps[0].year - b.steps[0].year));
+      const qHit = s => st.q && (s.title + (s.term || '')).includes(st.q) ? 1 : 0;
+      ss.sort((a, b) => (qHit(b) - qHit(a)) || (st.sort === 'region' ? regionIndex(a.region) - regionIndex(b.region) || a.steps[0].year - b.steps[0].year : (st.sort === 'year-desc' ? -1 : 1) * (a.steps[0].year - b.steps[0].year)));
       cnt.textContent = `${ss.length}本`;
       grid.innerHTML = '';
       let lastHead = '';
       ss.forEach(s => {
-        const head = st.sort === 'region' ? (REGION[s.region] || {}).name : eraOf(s.steps[0].year);
+        const head = st.q && qHit(s) ? '題名に「' + st.q + '」' : st.sort === 'region' ? (REGION[s.region] || {}).name : eraOf(s.steps[0].year);
         if (head !== lastHead) { grid.appendChild(el(`<h3 class="lf-head">${esc(head || '')}</h3>`)); lastHead = head; }
         const col = (REGION[s.region] || {}).color || '#555';
         const talk = s.steps.some(x => x.talk);
@@ -91,7 +93,7 @@ registerTool('events', {
     const PAGE = 150;
     function renderMore() {
       rows.slice(shown, shown + PAGE).forEach(({ e, i }) => {
-        const head = sortMode === 'region' ? (REGION[e.region] || {}).name : eraOf(e.year);
+        const head = sortMode === 'region' ? (REGION[e.region] || {}).name : `${eraOf(e.year)}・${centLabel(centOf(e.year))}`;   // 世紀ごとに見出し
         if (head !== lastHead) { list.appendChild(el(`<h3 class="lf-head">${esc(head || '')}</h3>`)); lastHead = head; }
         const fun = EVENT_FUN[e.title];
         list.appendChild(el(`<a class="evrow" href="${mapHash(e.year, REGION_VIEW_OF[e.region] || 'world', 'e:' + i)}">
@@ -105,7 +107,7 @@ registerTool('events', {
     }
     more.addEventListener('click', renderMore);
     listFilters(f, 'eventFilter', { search: true, kinds: true }, st => {
-      rows = EVENTS.map((e, i) => ({ e, i })).filter(({ e }) => (!st.region || e.region === st.region) && (!st.era || eraOf(e.year) === st.era) && (!st.course || (e.tags || []).includes(st.course)) && (!st.kind || e.kind === st.kind) && (!st.q || (e.title + (e.text || '') + (e.place || '') + (EVENT_FUN[e.title] || '')).includes(st.q)));
+      rows = EVENTS.map((e, i) => ({ e, i })).filter(({ e }) => (!st.region || e.region === st.region) && (!st.era || eraOf(e.year) === st.era) && (!st.course || (e.tags || []).includes(st.course)) && (!st.kind || e.kind === st.kind) && (!st.cent || centOf(e.year) === +st.cent) && (!st.q || (/^\d{2,4}$/.test(st.q) ? (e.year >= +st.q && e.year < +st.q + 100) : (e.title + (e.text || '') + (e.place || '') + (EVENT_FUN[e.title] || '')).includes(st.q))));   // 数字なら、その年から100年
       rows.sort((a, b) => st.sort === 'region' ? regionIndex(a.e.region) - regionIndex(b.e.region) || a.e.year - b.e.year : (st.sort === 'year-desc' ? -1 : 1) * (a.e.year - b.e.year));
       cnt.textContent = `${rows.length}件`;
       list.innerHTML = ''; shown = 0; sortMode = st.sort; lastHead = '';
