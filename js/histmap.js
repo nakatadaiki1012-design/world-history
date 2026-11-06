@@ -281,6 +281,7 @@ function createHistMap(host, opts = {}) {
     drawStatic();
     renderViews();
     scheduleRelief(true);
+    if (drawnOnce) warmUp();
   }
   // 年によって変わらないもの（海・陸・経緯線・今の国境・地形）
   function drawStatic() {
@@ -459,11 +460,32 @@ function createHistMap(host, opts = {}) {
     return out;
   }
 
+  // 手があいているときに、ほかの年の国の形と名前の位置を先に計算しておく（ツマミを動かしたとき軽くなる）
+  let warmJob = 0;
+  function warmUp() {
+    if (opts.mini || !pr) return;
+    const job = ++warmJob, list = [];
+    POLITIES.forEach(p => (p.shapes || []).forEach(sh => {
+      const y = Math.round((Math.max(sh.from, p.start, YEAR_MIN) + Math.min(sh.to, p.end, YEAR_MAX)) / 2);
+      list.push([Math.abs(y - st.year), p, y]);
+    }));
+    list.sort((a, b) => a[0] - b[0]);
+    let i = 0;
+    const later = () => { if (window.requestIdleCallback) requestIdleCallback(step, { timeout: 2000 }); else setTimeout(step, 60); };
+    function step() {
+      if (job !== warmJob) return;
+      if (gest || st.scrub) { setTimeout(later, 300); return; }   // 動かしているあいだは休む
+      const t0 = performance.now();
+      while (i < list.length && performance.now() - t0 < 6) { const [, p, y] = list[i++]; const f = GEO.shapeAt(p, y); if (f) { pathOf(f); boundsOf(f); labelPoint(f); } }
+      if (i < list.length) later();
+    }
+    setTimeout(later, 1500);
+  }
   let feats = [], shownPeople = [], shownEvents = [];
   let drawnOnce = false;
   function draw() {
     if (!pr) return;
-    if (!drawnOnce) { drawnOnce = true; requestAnimationFrame(() => window.dispatchEvent(new Event('mapdrawn'))); }
+    if (!drawnOnce) { drawnOnce = true; requestAnimationFrame(() => window.dispatchEvent(new Event('mapdrawn'))); warmUp(); }
     const y = st.year;
     feats = GEO.politiesAt(y);
     // 勢力圏（斜線）
@@ -617,7 +639,7 @@ function createHistMap(host, opts = {}) {
     // 歴史的な地名（その年の名前で。都と同じ場所なら、都の名前のかわりにこちらを出す）
     const plc = [];
     if (st.layers.places && PLACES.length && !opts.mini) {
-      const lim = t.k < 1.6 && st.view === 'world' ? 1 : t.k < 3 ? 2 : 3;
+      const lim = st.scrub ? 1 : t.k < 1.6 && st.view === 'world' ? 1 : t.k < 3 ? 2 : 3;   // ツマミを動かしている最中は大きな地名だけ
       PLACES.forEach(pl => {
         if ((pl.rank || 2) > lim) return;
         const nm = placeNameAt(pl, st.year); if (!nm) return;
@@ -714,7 +736,7 @@ function createHistMap(host, opts = {}) {
     // 地形の名前・川の名前・今の町（いちばん後回し。あいている所だけ）
     const tlabs = [];
     const T = terrainData();
-    if (T && st.layers.terrain && !opts.mini) {
+    if (T && st.layers.terrain && !opts.mini && !st.scrub) {
       const k = st.k, S = st.ls || 1;
       T.regions.forEach(f => {
         const p = f.properties; if (!TCLS[p.c] || !p.n) return;
@@ -731,7 +753,7 @@ function createHistMap(host, opts = {}) {
         jobs.push({ pri: 8.5, sub: p.r, run: () => { const b = [x + 3, y - h, x + 3 + w, y]; if (!hit(b)) { boxes.push(b); tlabs.push({ cls: 'tl-riv', n: p.n, x: x + 3, y: y - h / 2, a: 'start' }); } } });
       });
     }
-    if (window.CITIES && st.layers.cities && !opts.mini && st.k >= 3) {
+    if (window.CITIES && st.layers.cities && !opts.mini && st.k >= 3 && !st.scrub) {
       const k = st.k, S = st.ls || 1, maxR = k < 6 ? 2 : k < 12 ? 3 : k < 30 ? 5 : 6;
       window.CITIES.forEach(([n, lon, lat, r]) => {
         if (r > maxR) return;
@@ -1139,10 +1161,13 @@ function createHistMap(host, opts = {}) {
   // 描きなおしの注文は、1コマにまとめて1回だけ描く（同じコマで何度たのまれても）
   let drawRaf = 0;
   function requestDraw() { if (!pr) return; if (!drawRaf) drawRaf = requestAnimationFrame(() => { drawRaf = 0; draw(); }); }
+  // 年を次々に変えているあいだ（ツマミ・再生・ボタンの連打）は、細かい名前（地形・今の町・小さな地名）を後回しにして軽くする
+  let scrubT = null;
   function setYear(y) {
     y = fixYear(y);
     if (y === st.year && pr) return;
     st.year = y;
+    if (pr) { st.scrub = true; clearTimeout(scrubT); scrubT = setTimeout(() => { st.scrub = false; placeOverlay(); }, 450); }
     // ツマミを速く動かしても、描くのは1コマに1回だけ（最後の年だけ描く）
     requestDraw();
     if (opts.onYear) opts.onYear(y);
