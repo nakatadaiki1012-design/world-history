@@ -72,6 +72,9 @@ function createHistMap(host, opts = {}) {
   </div>`);
   host.appendChild(root);
   const stage = $('.hm-stage', root), svgEl = $('svg', root), tip = $('.hm-tip', root);
+  // 地図を箱（div）で包み、動かすときは箱をずらす（svg そのものを動かすと、ブラウザが毎コマ描きなおしてしまう）
+  const panEl = document.createElement('div'); panEl.className = 'hm-pan';
+  svgEl.parentNode.insertBefore(panEl, svgEl); panEl.appendChild(svgEl);
   const svg = d3.select(svgEl);
   const gZoom = svg.append('g');
   const gBase = gZoom.append('g');
@@ -157,7 +160,6 @@ function createHistMap(host, opts = {}) {
     .on('start.fast', ev => {
       if (!ev.sourceEvent || opts.mini || gest) return;
       gest = { t0: st.t };
-      svgEl.style.willChange = 'transform'; hideTip();
     })
     .on('zoom', ev => {
     st.t = ev.transform; st.k = ev.transform.k;
@@ -165,7 +167,8 @@ function createHistMap(host, opts = {}) {
     if (gest) {
       if (ev.sourceEvent) {
         const t0 = gest.t0, t1 = ev.transform, r = t1.k / t0.k;
-        svgEl.style.transform = `translate(${t1.x - t0.x * r}px, ${t1.y - t0.y * r}px) scale(${r})`;
+        panEl.style.transform = `translate(${t1.x - t0.x * r}px, ${t1.y - t0.y * r}px) scale(${r})`;
+        if (!gest.moved) { gest.moved = true; hideTip(); }   // 本当に動いたら、説明ボックスを消す（タップだけなら消さない）
         if (!zoomRaf) zoomRaf = requestAnimationFrame(() => { zoomRaf = 0; drawInset(true); });
         return;
       }
@@ -181,7 +184,7 @@ function createHistMap(host, opts = {}) {
   function endGest() {
     if (!gest) return;
     gest = null;
-    svgEl.style.transform = ''; svgEl.style.willChange = '';
+    panEl.style.transform = '';
     gPol.style('opacity', st.k > 25 ? 0.22 : st.k > 12 ? 0.6 : null); gEdge.style('opacity', st.k > 25 ? 0.3 : null);
     gZoom.attr('transform', st.t);
     updateTerrain(); placeOverlay();
@@ -515,7 +518,7 @@ function createHistMap(host, opts = {}) {
     ss.enter().append('path').attr('class', 'hm-sph')
       .on('click', (ev, f) => { ev.stopPropagation(); select({ type: 'polity', id: f.properties.p.id }); })
       .on('mousemove', (ev, f) => showTip(ev, `<b>${esc(f.properties.p.name)}</b>の${esc(SPHERE_KIND[f.properties.s.kind] || '勢力圏')}<br><span style="font-size:12px">${esc(f.properties.s.name || '')}</span>`))
-      .on('mouseleave', hideTip)
+      .on('mouseleave', hideTipMouse)
       .merge(ss).attr('d', pathOf).attr('fill', f => `url(#${f.pat})`).attr('stroke', f => f.properties.p.color || '#888');
     if (opts.only) feats = feats.filter(f => opts.only.includes(f.properties.p.id));
     const sel = st.sel;
@@ -524,7 +527,7 @@ function createHistMap(host, opts = {}) {
     ps.enter().append('path').attr('class', 'hm-pol')
       .on('click', (ev, f) => { ev.stopPropagation(); select({ type: 'polity', id: f.properties.p.id }); })
       .on('mousemove', (ev, f) => showTip(ev, `<b>${esc(f.properties.p.name)}</b> <span class="muted num">${span(f.properties.p.start, f.properties.p.end)}</span>`))
-      .on('mouseleave', hideTip)
+      .on('mouseleave', hideTipMouse)
       .merge(ps)
       .attr('d', pathOf)
       .attr('fill', f => f.properties.p.color || '#888')
@@ -572,7 +575,7 @@ function createHistMap(host, opts = {}) {
     const key = str + '|' + px + '|' + (display ? 1 : 0);
     if (!mcache.has(key)) {
       if (!textW.ff) textW.ff = {}; const kk = display ? 'd' : 'b';
-      if (textW.ff[kk] === undefined) textW.ff[kk] = getComputedStyle(document.documentElement).getPropertyValue(display ? '--font-display' : '--font-body');
+      if (textW.ff[kk] === undefined) textW.ff[kk] = getComputedStyle(document.documentElement).getPropertyValue(display ? '--font-map' : '--font-map-sans');
       const ff = textW.ff[kk];
       mctx.font = `${display ? 800 : 700} ${px}px ${ff || 'sans-serif'}`;
       mcache.set(key, mctx.measureText(str).width + (display ? str.length * px * 0.04 : 0));
@@ -813,7 +816,7 @@ function createHistMap(host, opts = {}) {
         select({ type: 'place', id: d.pl.id });
       })
       .on('mousemove', (ev, d) => showTip(ev, `<b>${esc(d.name)}</b>${(() => { const m = d.pl.modern; if (!m || m === d.name) return ''; const r = m.startsWith(d.name) ? m.slice(d.name.length).replace(/^（(.*)）$/, '$1') : m; return r ? `（今の${esc(r)}）` : ''; })()}<br><span style="font-size:12px">${esc(d.pl.text || '')}</span>`))
-      .on('mouseleave', hideTip);
+      .on('mouseleave', hideTipMouse);
     pe2.append('line').attr('class', 'lead');
     pe2.append('path').attr('d', 'M0,-4.5L4.5,0L0,4.5L-4.5,0Z');
     pe2.append('rect').attr('class', 'selbg');
@@ -839,7 +842,7 @@ function createHistMap(host, opts = {}) {
     const ve = vs.enter().append('g').attr('class', 'hm-ev')
       .on('click', (ev, d) => { ev.stopPropagation(); select({ type: 'event', id: d.i }); })
       .on('mousemove', (ev, d) => showTip(ev, `<b>${esc(d.e.title)}</b> <span class="muted num">${esc(yearLabel(d.e.year))}</span><br><span style="font-size:12px">${esc(d.e.text || '')}</span>`))
-      .on('mouseleave', hideTip);
+      .on('mouseleave', hideTipMouse);
     ve.append('path').attr('d', 'M0,-7L7,0L0,7L-7,0Z');
     ve.append('text').attr('dominant-baseline', 'central');
     const vm = ve.merge(vs);
@@ -857,7 +860,7 @@ function createHistMap(host, opts = {}) {
     const pe = pp.enter().append('g').attr('class', 'hm-person')
       .on('click', (ev, d) => { ev.stopPropagation(); select({ type: 'person', id: d.p.id }); })
       .on('mousemove', (ev, d) => showTip(ev, `${portraitImg(d.p, 'tipimg')}<b>${esc(d.p.name)}</b>（${esc(d.p.role || '')}）<br><span class="muted">${esc(d.pl.name)}${d.pl.note ? '：' + esc(d.pl.note) : ''}</span>`))
-      .on('mouseleave', hideTip);
+      .on('mouseleave', hideTipMouse);
     pe.append('line').attr('class', 'leg');
     pe.append('circle').attr('class', 'ring');
     pe.each(function (d) {
@@ -908,15 +911,23 @@ function createHistMap(host, opts = {}) {
     });
   }
 
+  // 説明ボックスは、出し入れで「消す・出す」をせず、透明にする・ずらすだけ（ページの並びの計算をやり直さない＝地図を描きなおさない）
+  tip.classList.add('ftip'); tip.hidden = false;
+  let tipHtml = '', tipW = 0, tipH = 0;
   function showTip(ev, html) {
     if (opts.mini) return;
     const r = stage.getBoundingClientRect();
-    tip.innerHTML = html; tip.hidden = false;
+    if (html !== tipHtml) { tip.innerHTML = html; tipHtml = html; tipW = tip.offsetWidth; tipH = tip.offsetHeight; }
     const x = ev.clientX - r.left, y = ev.clientY - r.top;
-    tip.style.left = Math.min(x + 14, r.width - tip.offsetWidth - 6) + 'px';
-    tip.style.top = Math.max(4, y - tip.offsetHeight - 10) + 'px';
+    tip.style.transform = `translate(${Math.round(Math.max(4, Math.min(x + 14, r.width - tipW - 6)))}px, ${Math.round(Math.max(4, y - tipH - 10))}px)`;
+    tip.classList.add('on');
   }
-  function hideTip() { tip.hidden = true; }
+  function hideTip() { tip.classList.remove('on'); }
+  // 指で操作したときは「離れた」の合図では消さない（タップで地名を選ぶと印が並べなおされ、その合図が出てしまう）。次のタップで消える
+  let lastPtr = 'mouse';
+  const onPtr = e => { lastPtr = e.pointerType || 'mouse'; };
+  document.addEventListener('pointerdown', onPtr, true);
+  function hideTipMouse() { if (lastPtr !== 'touch') hideTip(); }
   // 大きな文字・印刷
   { const bk = $('.big-ck', root); if (bk) { bk.checked = document.documentElement.classList.contains('big');
       bk.addEventListener('change', () => { setBigText(bk.checked); }); }
@@ -1227,6 +1238,6 @@ function createHistMap(host, opts = {}) {
     },
     people: () => shownPeople.filter(x => !x.ghost),
     events: () => shownEvents,
-    destroy() { stop(); ro.disconnect(); window.removeEventListener('bigtext', onBig); document.removeEventListener('pointerdown', onDown, true); window.removeEventListener('lateready', onLate); root.remove(); }
+    destroy() { stop(); ro.disconnect(); window.removeEventListener('bigtext', onBig); document.removeEventListener('pointerdown', onDown, true); document.removeEventListener('pointerdown', onPtr, true); window.removeEventListener('lateready', onLate); root.remove(); }
   };
 }
