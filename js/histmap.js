@@ -158,7 +158,10 @@ function createHistMap(host, opts = {}) {
     .filter(ev => (!ev.ctrlKey || ev.type === 'wheel') && !ev.button && svgEl.contains(ev.target))
     .on('start.moved', () => { startT = st.t; })
     .on('start.fast', ev => {
-      if (!ev.sourceEvent || opts.mini || gest) return;
+      if (opts.mini) return;
+      relTok++; clearTimeout(relTimer);   // 動き始めたら、山の影の描きなおしはやめる（動き終わってから）
+      if (!ev.sourceEvent) { flying = true; gOver.style('display', 'none'); return; }   // 自動の動き：名前や印はいったんかくし、着いてから置く
+      if (gest) return;
       gest = { t0: st.t };
     })
     .on('zoom', ev => {
@@ -177,19 +180,29 @@ function createHistMap(host, opts = {}) {
     // 都市の大きさまで拡大したら、国の色をうすくして地形の線を見やすく
     gPol.style('opacity', st.k > 25 ? 0.22 : st.k > 12 ? 0.6 : null); gEdge.style('opacity', st.k > 25 ? 0.3 : null);
     gZoom.attr('transform', ev.transform);
-    // 名前や点の置きなおしは、1コマに1回だけ（ホイールやピンチで何回よばれても）
-    if (!zoomRaf) zoomRaf = requestAnimationFrame(() => { zoomRaf = 0; updateTerrain(); placeOverlay(); drawInset(true); });
+    // 名前や点の置きなおしは、1コマに1回だけ。自動で動いているあいだは置かない（動きのなめらかさを先に）
+    if (!zoomRaf) zoomRaf = requestAnimationFrame(() => { zoomRaf = 0; updateTerrain(); if (!flying) placeOverlay(); drawInset(true); });
   });
-  let zoomRaf = 0;
+  let zoomRaf = 0, flying = false, overlayT = d3.zoomIdentity, placeT = null, overlayPending = false;
+  // 名前や印を、少しあとで置きなおす（そのあいだは、前の名前を地図といっしょにずらしておく）
+  function placeLater(ms) {
+    clearTimeout(placeT);
+    placeT = setTimeout(() => { if (gest || flying) { placeLater(120); return; } placeOverlay(); }, ms == null ? 90 : ms);
+  }
   function endGest() {
     if (!gest) return;
     gest = null;
     panEl.style.transform = '';
     gPol.style('opacity', st.k > 25 ? 0.22 : st.k > 12 ? 0.6 : null); gEdge.style('opacity', st.k > 25 ? 0.3 : null);
     gZoom.attr('transform', st.t);
-    updateTerrain(); placeOverlay();
+    // 前に置いた名前を、今の位置までずらしておく（置きなおすまでの、ほんの少しのあいだ）
+    const r = st.t.k / overlayT.k;
+    gOver.attr('transform', `translate(${st.t.x - overlayT.x * r},${st.t.y - overlayT.y * r}) scale(${r})`);
+    updateTerrain(); placeLater();
   }
-  zoom.on('end.relief', ev => { endGest(); updateDetail(); drawInset(); scheduleRelief(); if (ev.sourceEvent && startT && (Math.abs(startT.x - st.t.x) + Math.abs(startT.y - st.t.y) > 4 || Math.abs(startT.k - st.t.k) > 0.01)) { markNear(); showViews(4000); } });
+  zoom.on('end.relief', ev => {
+    if (flying) { flying = false; gOver.style('display', null); placeLater(0); }
+    endGest(); updateDetail(); drawInset(); scheduleRelief(); if (ev.sourceEvent && startT && (Math.abs(startT.x - st.t.x) + Math.abs(startT.y - st.t.y) > 4 || Math.abs(startT.k - st.t.k) > 0.01)) { markNear(); showViews(4000); } });
   zsel.call(zoom).on('dblclick.zoom', null);
   // 最初に少しだけ見せて、ここにあることを知らせる
   setTimeout(() => showViews(3500), 300);
@@ -589,6 +602,9 @@ function createHistMap(host, opts = {}) {
   // 2) 名前は大事なものから順に、候補の位置を試して、何とも重ならない所にだけ出す
   function placeOverlay() {
     if (!pr) return;
+    if (gest || flying) { overlayPending = true; placeLater(120); return; }   // 動いているあいだは置かない
+    overlayPending = false; clearTimeout(placeT);
+    overlayT = st.t; gOver.attr('transform', null);
     if (opts.mini) { gPlc.selectAll('*').remove(); gLab.selectAll('*').remove(); gCap.selectAll('*').remove(); gEv.selectAll('*').remove(); gPeo.selectAll('*').remove(); gTrail.selectAll('*').remove(); return; }
     const t = st.t, W = st.w, H = st.h, sel = st.sel;
     const PAD = 2;
@@ -1024,7 +1040,7 @@ function createHistMap(host, opts = {}) {
     };
     requestDraw();
     const S = st.story;
-    (function tick() { if (st.story !== S) return; placeOverlay(); if (performance.now() - S.t0 < 3000) requestAnimationFrame(tick); })();
+    (function tick() { if (st.story !== S) return; if (!gest && !flying) placeOverlay(); if (performance.now() - S.t0 < 3000) requestAnimationFrame(tick); })();
   }
   // その地点を中心に、横 span 度ぶんが入るように拡大して移動
   // --- まわりの「見どころ」の多さで、寄り方を決める ---
