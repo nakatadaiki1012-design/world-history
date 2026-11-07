@@ -431,7 +431,8 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .lq .qchoices button { padding: 7px 12px; font-size: 14px; }
 @media (max-width: 900px) {
   .lesson { grid-template-columns: 1fr; height: auto; }
-  .lesson .hm { height: 62vh; order: -1; }
+  .lesson .lmap { order: -1; position: sticky; top: var(--top-h, 0px); z-index: 3; }   /* スマホ：地図を上に固定して、読みながら見られるように */
+  .lesson .hm { height: 40vh; height: 40dvh; min-height: 230px; box-shadow: 0 6px 14px rgba(0,0,0,.12); }
   .lesson-text { overflow: visible; }
 }
 .story h2 { font-size: 22px; }
