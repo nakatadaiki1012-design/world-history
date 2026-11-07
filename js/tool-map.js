@@ -292,8 +292,13 @@ registerTool('map', {
       if (IMAGES['person:' + p.id]) body.appendChild(el(`<div>${figureHtml('person:' + p.id, 2)}</div>`));
       if (hasProfile(p.id)) body.appendChild(profileBtn(p.id));
       { const life = lifeStoryOf(p.id); if (life) { const b = el(`<button type="button" class="btn profbtn">👤 生涯を物語でたどる</button>`); b.addEventListener('click', () => startStory(life, 0)); body.appendChild(b); } }
-      const pairs = [[`⏮ 生まれた年`, () => map.setYear(p.born)], [`⏭ 亡くなった年`, () => map.setYear(p.died)]];
-      pairs.push([`▶ 一生をたどる`, () => playLife(p)]);
+      // 物語のデータがまだなら読みはじめる（届いたら、横の欄がかき直されて「生涯を物語でたどる」が出る）
+      if (!STORIES.length && window.ensureStories) ensureStories();
+      // 「▶ 一生をたどる」：その人の生涯の物語があれば物語で。なければ、年を進めながら足あとを動かす
+      const goLife = () => { const life = lifeStoryOf(p.id); if (life) startStory(life, 0); else playLife(p); };
+      const pairs = [[`▶ 一生をたどる`, () => { if (!STORIES.length && window.ensureStories) ensureStories().then(goLife); else goLife(); }]];
+      pairs.push([`⏮ 生まれた年`, () => map.setYear(p.born)], [`⏭ 亡くなった年`, () => map.setYear(p.died)]);
+      pairs.push([`⏩ 足あとを年の順に動かす`, () => playLife(p)]);
       if (pol) pairs.push([`${esc(pol.name)}を見る`, () => map.select({ type: 'polity', id: pol.id })]);
       body.appendChild(jumpBtns(pairs));
       body.appendChild(el('<h3>足あと（おすとその年へ）</h3>'));

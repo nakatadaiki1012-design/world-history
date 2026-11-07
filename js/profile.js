@@ -45,6 +45,8 @@ function openProfile(id) {
   const bt = $('.prof-btns', ov);
   bt.appendChild(speakBtn(() => `${p.name}。${d.catch || ''}。` + (d.story || []).join('。'), '🔊 読み上げ'));
   const life = lifeStoryOf(p.id);
+  // 物語がまだ読みこまれていなければ、読んでからボタンを足す
+  if (!life && !STORIES.length && window.ensureStories) ensureStories().then(() => { const l2 = lifeStoryOf(p.id); if (l2 && ov.isConnected) { const la = el(`<a class="chip" style="background:var(--accent);color:var(--accent-ink);border-color:var(--accent)" href="#story/${esc(l2.id)}/1">👤 生涯を物語でたどる</a>`); la.addEventListener('click', close); bt.insertBefore(la, bt.children[1] || null); } });
   if (life) { const la = el(`<a class="chip" style="background:var(--accent);color:var(--accent-ink);border-color:var(--accent)" href="#story/${esc(life.id)}/1">👤 生涯を物語でたどる</a>`); la.addEventListener('click', close); bt.appendChild(la); }
   const mapA = el(`<a class="chip" href="${mapHash(mid, REGION_VIEW_OF[p.region] || 'world', 'p:' + p.id)}">🗺 地図で足あと</a>`);
   mapA.addEventListener('click', close);
