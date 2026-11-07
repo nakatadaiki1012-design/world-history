@@ -1,4 +1,4 @@
-/* 世界史ラボ：共通の部品（保存・地域・年の目盛り など） */
+/* 世界史クロノマップ：共通の部品（保存・地域・年の目盛り など） */
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));

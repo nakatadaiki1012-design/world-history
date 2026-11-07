@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>世界史ラボ</title>
+<title>世界史クロノマップ</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#8c2f39">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="世界史ラボ">
+<meta name="apple-mobile-web-app-title" content="クロノマップ">
 <meta name="description" content="歴史総合・世界史探究の授業で使える、年代のツマミを動かすと地図の王朝や人物が変わる世界史の学習アプリ">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -100,8 +100,11 @@ h1, h2, h3, h4 { font-family: var(--font-display); line-height: 1.35; }
 @media (max-width: 720px) {
   .brand small, .lbl { display: none; }
   .brand { font-size: 18px; }
-  .grpnav .g { padding: 4px 9px; font-size: 12.5px; }
+  .grpnav .g { padding: 4px 7px; font-size: 12.5px; }
+  .grpnav { gap: 3px; }
   .brand { font-size: 16px; }
+  .brand a { display: flex; flex-direction: column; line-height: 1.05; font-size: 11.5px; letter-spacing: .12em; }   /* スマホ：名前を2段に（世界史／クロノマップ） */
+  .brand b { font-size: 15px; letter-spacing: .02em; }
   .top-row .icon-btn { padding: 4px 8px; }
   .top-row { gap: 6px; }
   .top { padding-top: 6px; padding-bottom: 6px; }
@@ -679,13 +682,16 @@ a.term:hover { color: var(--ai); background: color-mix(in srgb, var(--ai) 10%, t
 @media (max-width: 900px) { .story-img, .story-img-show { display: none !important; } }
 @media (min-width: 901px) { .hm.has-simg .hm-caption { right: calc(220px * var(--ls, 1) + 70px); } }
 @media (max-width: 1500px) { .brand small { display: none; } }
+@media (max-width: 1400px) { .grpnav .lbl { display: none; } }
+@media (max-width: 350px) { .brand { display: none; } }   /* とても小さい画面：ボタンを優先 */
+@media (max-width: 1300px) { .grpnav .subs button { padding: 4px 8px; } .grpnav .g { padding: 5px 11px; } }   /* 名前が長くなったので、少しせまい画面では「授業モード」→「授業」 */
 .foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 18px; }
 </style>
 </head>
 <body>
 <header class="top" id="top">
   <div class="top-row">
-    <h1 class="brand"><a href="#map">世界史<b>ラボ</b></a><small>年代を動かして見る ― 歴史総合・世界史探究</small></h1>
+    <h1 class="brand"><a href="#map">世界史<b>クロノマップ</b></a><small>年代を動かして見る ― 歴史総合・世界史探究</small></h1>
     <nav class="grpnav" id="grpnav" aria-label="モード"></nav>
     <button type="button" class="icon-btn" id="searchBtn" aria-label="まとめて探す" title="まとめて探す（/ キー）">🔍<span class="lbl"> 探す</span></button>
     <button type="button" class="icon-btn" id="installBtn" hidden>📲<span class="lbl"> アプリにする</span></button>

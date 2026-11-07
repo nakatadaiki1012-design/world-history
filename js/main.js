@@ -1,6 +1,6 @@
 /* 画面の切りかえ（地図と年表／挑戦／授業モード）と、URL の # による直接リンク */
 const GROUPS = [
-  { id: 'see', name: '地図と年表', secs: [['map', '🗺 歴史地図'], ['stories', '▶ 物語でたどる'], ['events', '出来事'], ['chrono', '年表'], ['ptl', '人物年表'], ['econ', '人口と経済'], ['people', '人物図鑑'], ['glossary', '用語集']] },
+  { id: 'see', name: '地図<span class="lbl">と年表</span>', secs: [['map', '🗺 歴史地図'], ['stories', '▶ 物語でたどる'], ['events', '出来事'], ['chrono', '年表'], ['ptl', '人物年表'], ['econ', '人口と経済'], ['people', '人物図鑑'], ['glossary', '用語集']] },
   { id: 'try', name: '挑戦', secs: [['quiz', 'クイズ'], ['cards', '🃏 暗記カード'], ['record', '📊 学習の記録']] },
   { id: 'class', name: '授業<span class="lbl">モード</span>', secs: [['lessons/sogo', '歴史総合'], ['lessons/tankyu', '世界史探究']] }
 ];
@@ -39,11 +39,13 @@ let waitingRoute = false;
 // 上の切りかえボタン。スマホでは、えらんだ組の中のボタン（出来事・年表…）を2段目に横いっぱいに並べる
 let navState = null;
 const isPhone = () => window.matchMedia('(max-width: 720px)').matches;
+// 画面ボタンを2段目に並べる幅（タブレットや小さいノートパソコンも）
+const navTwoRows = () => window.matchMedia('(max-width: 1100px)').matches;
 function renderNav() {
   if (!navState) return;
   const { own, secKey } = navState;
   const nav = $('#grpnav'), sub = $('#subnav'); nav.innerHTML = ''; sub.innerHTML = '';
-  const phone = isPhone();
+  const phone = navTwoRows();
   GROUPS.forEach(g => {
     const b = el(`<button type="button" class="g" aria-current="${g === own}">${g.name}</button>`);
     b.addEventListener('click', () => { location.hash = '#' + g.secs[0][0]; });
@@ -61,8 +63,8 @@ function renderNav() {
   const cur = $('button[aria-current="true"]', sub);
   if (cur) requestAnimationFrame(() => { sub.scrollLeft = Math.max(0, cur.offsetLeft - sub.clientWidth / 2 + cur.offsetWidth / 2); });
 }
-let wasPhone = isPhone();
-window.addEventListener('resize', () => { if (isPhone() !== wasPhone) { wasPhone = isPhone(); renderNav(); setTopHeight(); } });
+let wasPhone = navTwoRows();
+window.addEventListener('resize', () => { if (navTwoRows() !== wasPhone) { wasPhone = navTwoRows(); renderNav(); setTopHeight(); } });
 
 let current = null;
 function route() {
@@ -93,7 +95,7 @@ function route() {
   }
   current = TOOLS[id].render(main, params) || null;
   const title = id === 'lessons' ? COURSE[params.course] : TOOLS[id].name;
-  document.title = `${title} | 世界史ラボ`;
+  document.title = `${title} | 世界史クロノマップ`;
   setTopHeight();
   window.scrollTo(0, 0);
 }
