@@ -602,6 +602,22 @@ function createHistMap(host, opts = {}) {
 
     // 物語の地点・進路（名前の場所取りより先に）
     const storyLabels = drawStory(boxes);
+    // 人物の足あと（えらんだ人物の一生の場所）。点は先に場所をとり、名前はあとで重ならない所に置く
+    const trail = trailStops();
+    trail.forEach(s => boxes.push([s.xy[0] - 5, s.xy[1] - 5, s.xy[0] + 5, s.xy[1] + 5]));
+    // 足あとの名前は、ほかの印より先に場所をとる。同じ場所に何度も来ていれば、番号をまとめて1つに（例：2・5・8 パリ）
+    if (trail.length > 1) {
+      const S = st.ls || 1, h = 13 * S, groups = [];
+      trail.forEach((s, n) => { const g = groups.find(g => Math.hypot(g.x - s.xy[0], g.y - s.xy[1]) < 3); if (g) { g.ns.push(n + 1); s.dup = true; } else groups.push({ x: s.xy[0], y: s.xy[1], ns: [n + 1], name: s.pl.name, stop: s }); });
+      const cands = (x, y, w) => [[x + 7, y - h / 2, 7, 0, 'start'], [x - 7 - w, y - h / 2, -7, 0, 'end'], [x - w / 2, y - 7 - h, 0, -7 - h / 2, 'middle'], [x - w / 2, y + 7, 0, 7 + h / 2, 'middle'], [x + 5, y - 5 - h, 5, -5 - h / 2, 'start'], [x + 5, y + 5, 5, 5 + h / 2, 'start']]
+        .map(([bx, by, dx, dy, a]) => ({ b: [bx, by, bx + w, by + h], dx, dy, a }));
+      groups.forEach(g => {
+        for (const txt of [`${g.ns.join('・')} ${g.name}`.slice(0, 22), g.ns.join('・')]) {
+          const w = textW(txt, 11 * S, false), c = cands(g.x, g.y, w).find(c => !hit(c.b));
+          if (c) { boxes.push(c.b); g.stop.lab = c; g.stop.txt = txt; break; }
+        }
+      });
+    }
 
     // えらんだ地名の名前は、人物などより先に場所をとる
     let selPlaceBox = null;
@@ -652,7 +668,7 @@ function createHistMap(host, opts = {}) {
     // 歴史的な地名（その年の名前で。都と同じ場所なら、都の名前のかわりにこちらを出す）
     const plc = [];
     if (st.layers.places && PLACES.length && !opts.mini) {
-      const lim = st.scrub ? 1 : t.k < 1.6 && st.view === 'world' ? 1 : t.k < 3 ? 2 : 3;   // ツマミを動かしている最中は大きな地名だけ
+      const lim = st.scrub || trail.length > 1 ? 1 : t.k < 1.6 && st.view === 'world' ? 1 : t.k < 3 ? 2 : 3;   // ツマミを動かしている最中は大きな地名だけ
       PLACES.forEach(pl => {
         if ((pl.rank || 2) > lim) return;
         const nm = placeNameAt(pl, st.year); if (!nm) return;
@@ -749,7 +765,7 @@ function createHistMap(host, opts = {}) {
     // 地形の名前・川の名前・今の町（いちばん後回し。あいている所だけ）
     const tlabs = [];
     const T = terrainData();
-    if (T && st.layers.terrain && !opts.mini && !st.scrub) {
+    if (T && st.layers.terrain && !opts.mini && !st.scrub && trail.length < 2) {   // 人物の足あとを出しているときは、地形の名前は控える
       const k = st.k, S = st.ls || 1;
       T.regions.forEach(f => {
         const p = f.properties; if (!TCLS[p.c] || !p.n) return;
@@ -766,7 +782,7 @@ function createHistMap(host, opts = {}) {
         jobs.push({ pri: 8.5, sub: p.r, run: () => { const b = [x + 3, y - h, x + 3 + w, y]; if (!hit(b)) { boxes.push(b); tlabs.push({ cls: 'tl-riv', n: p.n, x: x + 3, y: y - h / 2, a: 'start' }); } } });
       });
     }
-    if (window.CITIES && st.layers.cities && !opts.mini && st.k >= 3 && !st.scrub) {
+    if (window.CITIES && st.layers.cities && !opts.mini && st.k >= 3 && !st.scrub && trail.length < 2) {
       const k = st.k, S = st.ls || 1, maxR = k < 6 ? 2 : k < 12 ? 3 : k < 30 ? 5 : 6;
       window.CITIES.forEach(([n, lon, lat, r]) => {
         if (r > maxR) return;
@@ -883,14 +899,13 @@ function createHistMap(host, opts = {}) {
     });
     pm.filter(d => isSelP(d.p.id)).raise();
 
-    drawTrail();
+    drawTrail(trail);
   }
 
   // えらんだ人物の足あと
-  function drawTrail() {
-    gTrail.selectAll('*').remove();
+  function trailStops() {
     const sel = st.sel;
-    if (!sel || sel.type !== 'person' || !PERSON[sel.id]) return;
+    if (!sel || sel.type !== 'person' || !PERSON[sel.id]) return [];
     const p = PERSON[sel.id];
     const stops = [];
     p.places.forEach((pl, i) => {
@@ -899,6 +914,12 @@ function createHistMap(host, opts = {}) {
       const q = pr([pl.lon, pl.lat]); if (!q) return;
       stops.push({ pl, idx: [i], from: pl.from, to: pl.to, xy: st.t.apply(q) });
     });
+    return stops;
+  }
+  function drawTrail(stops) {
+    gTrail.selectAll('*').remove();
+    if (!stops.length) return;
+    const p = PERSON[st.sel.id];
     if (stops.length >= 2) {
       gTrail.append('path').attr('class', 'hm-trail').attr('d', d3.line().curve(d3.curveCatmullRom.alpha(0.5))(stops.map(s => s.xy)));
     }
@@ -907,7 +928,8 @@ function createHistMap(host, opts = {}) {
       const now = cur && s.idx.some(i => p.places[i] === cur);
       const g = gTrail.append('g').attr('class', 'hm-stop' + (now ? ' now' : '')).attr('transform', `translate(${s.xy[0]},${s.xy[1]})`);
       g.append('circle').attr('r', 4.5);
-      if (stops.length > 1) g.append('text').attr('x', 7).attr('y', -6).text(`${n + 1} ${s.pl.name}`.slice(0, 18));
+      // 名前は重ならない所に置けたときだけ（置けなければ点と番号の色だけ）
+      if (stops.length > 1 && s.lab) g.append('text').attr('x', s.lab.dx).attr('y', s.lab.dy).attr('text-anchor', s.lab.a).attr('dominant-baseline', 'central').text(s.txt);
     });
   }
 
