@@ -54,6 +54,9 @@ registerTool('chrono', {
       return ends.length;
     }
 
+    // 名前の実際の幅（帯の文字と同じ大きさ・太さで測る）
+    const ctx2 = document.createElement('canvas').getContext('2d'); const nwCache = new Map();
+    const nameW = t => { if (!nwCache.has(t)) { ctx2.font = `700 11.5px ${getComputedStyle(document.body).fontFamily}`; nwCache.set(t, ctx2.measureText(t).width + 2); } return nwCache.get(t); };
     function draw() {
       W = Math.max(300, sw.clientWidth);
       zoom.extent([[LEFT, 0], [W, 100]]).translateExtent([[LEFT, 0], [W, 100]]);
@@ -67,25 +70,28 @@ registerTool('chrono', {
           .map(p => ({ p, a: p.start, b: Math.min(p.end, YEAR_MAX) }));
         // 画面上の長さで重なりを判定（名前が入るように）
         items.forEach(it => { it.x0 = xOf(it.a); it.x1 = Math.max(xOf(it.b), it.x0 + 4); });
+        // 名前が帯の中に入らないときは帯の右に書くので、その名前の終わりまでを「使う場所」として段を決める（重ならないように）
         const ends = [];
         items.forEach(it => {
-          const need = it.x0;
-          let i = ends.findIndex(e => e + pad < need);
+          if (it.x1 < LEFT || it.x0 > W + 10) { it.lane = -1; return; }
+          const bx0 = Math.max(it.x0, LEFT - 4), tx = Math.max(it.x0, LEFT) + 4;
+          it.tw = nameW(it.p.name); it.fits = it.x1 - tx > it.tw;
+          const end = it.fits ? it.x1 : it.x1 + 3 + it.tw;
+          let i = ends.findIndex(e => e + pad < bx0);
           if (i < 0) { i = ends.length; ends.push(-1e9); }
-          const txtEnd = it.x0 + Math.max(it.x1 - it.x0, Math.min(it.p.name.length * 12 + 8, 120));
-          ends[i] = Math.max(it.x1, it.x1 - it.x0 < it.p.name.length * 12 + 8 ? txtEnd : it.x1); it.lane = i;
+          ends[i] = end; it.lane = i;
         });
         const n = Math.max(1, ends.length);
         g.append('text').attr('class', 'c-reg').attr('x', 6).attr('y', y0 + 14).text(r.name);
         g.append('line').attr('x1', 0).attr('x2', W).attr('y1', y0 - 4).attr('y2', y0 - 4).attr('stroke', 'var(--line)');
         items.forEach(it => {
-          if (it.x1 < LEFT || it.x0 > W + 10) return;   // 画面の左（ラベルの列）に入るものは出さない
+          if (it.lane < 0) return;   // 画面の外（ラベルの列）に入るものは出さない
           const p = it.p, y = y0 + it.lane * (LANE + GAP);
           const bg = g.append('g').attr('class', 'cb' + (isLight(p.color) ? ' light' : '') + (sel === p.id ? ' sel' : '')).style('cursor', 'pointer');
           bg.append('rect').attr('x', Math.max(it.x0, LEFT - 4)).attr('y', y).attr('width', Math.max(3, it.x1 - Math.max(it.x0, LEFT - 4))).attr('height', LANE).attr('fill', p.color).attr('rx', 4)
             .append('title').text(`${p.name}（${span(p.start, p.end)}）`);
           const tx = Math.max(it.x0, LEFT) + 4;
-          const fits = it.x1 - tx > p.name.length * 11.5;
+          const fits = it.fits;
           bg.append('text').attr('x', fits ? tx : it.x1 + 3).attr('y', y + 15).text(p.name).style('fill', fits ? null : 'var(--ink)');
           bg.on('click', ev => { ev.stopPropagation(); sel = p.id; if (year < p.start || year > p.end) year = clamp(year, p.start, Math.min(p.end, YEAR_MAX)); store.set('year', year); draw(); side(); });
         });
