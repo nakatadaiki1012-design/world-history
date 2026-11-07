@@ -93,7 +93,7 @@ registerTool('chrono', {
           const tx = Math.max(it.x0, LEFT) + 4;
           const fits = it.fits;
           bg.append('text').attr('x', fits ? tx : it.x1 + 3).attr('y', y + 15).text(p.name).style('fill', fits ? null : 'var(--ink)');
-          bg.on('click', ev => { ev.stopPropagation(); sel = p.id; if (year < p.start || year > p.end) year = clamp(year, p.start, Math.min(p.end, YEAR_MAX)); store.set('year', year); draw(); side(); });
+          bg.on('click', ev => { ev.stopPropagation(); sel = p.id; if (year < p.start || year > p.end) year = clamp(year, p.start, Math.min(p.end, YEAR_MAX)); store.set('year', year); draw(); side(); const sp = $('.side, .chrono-side', main) || main.querySelector('aside'); if (sp && innerWidth <= 900) sp.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
         });
         y0 += n * (LANE + GAP) + 14;
       });

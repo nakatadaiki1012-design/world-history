@@ -287,7 +287,7 @@ registerTool('map', {
         <div class="num" style="font-weight:700">${esc(lifeSpan(p))}</div>
         <p>${linkTerms(p.text || '', p.name)}</p>
         ${p.keys && p.keys.length ? `<div class="keys">${p.keys.map(k => TERM[k] ? `<a class="term" data-term="${esc(k)}" href="#term/${encodeURIComponent(k)}"><span>${esc(k)}</span></a>` : `<span>${esc(k)}</span>`).join('')}</div>` : ''}
-        ${ph ? `<div class="credit">肖像：${esc(ph.what || '')}${ph.artist ? '（' + esc(ph.artist) + '）' : ''}・${esc(ph.license || '')}・<a href="${esc(ph.page || '#')}" target="_blank" rel="noopener">ウィキメディア・コモンズ</a></div>` : ''}
+        ${ph ? `<div class="credit">肖像：${esc(ph.what || '')}${ph.artist ? '（' + esc(cleanArtist(ph.artist)) + '）' : ''}・${esc(ph.license || '')}・<a href="${esc(ph.page || '#')}" target="_blank" rel="noopener">ウィキメディア・コモンズ</a></div>` : ''}
       </div>`));
       if (IMAGES['person:' + p.id]) body.appendChild(el(`<div>${figureHtml('person:' + p.id, 2)}</div>`));
       if (hasProfile(p.id)) body.appendChild(profileBtn(p.id));
@@ -314,6 +314,8 @@ registerTool('map', {
       const steps = p.places.map(pl => pl.from).concat([p.died]);
       const dur = p.died - p.born, inc = Math.max(1, Math.round(dur / 40));
       map.setYear(y);
+      // スマホでは地図が画面の外にあることが多いので、地図が見える所まで送る
+      if (map.root.getBoundingClientRect().top < 0 || map.root.getBoundingClientRect().top > innerHeight * 0.5) map.root.scrollIntoView({ behavior: 'smooth', block: 'start' });
       const first = p.places[0]; if (first) map.focusOn(first.lon, first.lat);
       lifeTimer = setInterval(() => {
         y = Math.min(p.died, y + inc);
@@ -370,6 +372,9 @@ registerTool('map', {
       map.root.classList.remove('storying'); map.caption.hidden = true;
       $$('.story-img, .story-img-show', map.root).forEach(x => x.remove());
       map.setStory(null); syncHash(); renderSide();
+      // 上の切りかえを「歴史地図」にもどし、寄りすぎた地図を地域の広さにもどす
+      if (window.setNavSection) setNavSection('map');
+      map.setView(map.view);
     }
     // 場面の読み上げ用の文
     const stepSpeech = s => `${yearLabel(s.year)}${s.date ? '、' + s.date : ''}。${s.title}。${s.text || ''}${s.why ? '。' + s.why : ''}`;
@@ -440,6 +445,7 @@ registerTool('map', {
         ctx.addEventListener('scroll', () => ctx.classList.toggle('more', ctx.scrollTop + ctx.clientHeight < ctx.scrollHeight - 4), { passive: true });
         const hold = () => { ctx.dataset.touched = '1'; if (playing && !SPEECH.on) { clearTimeout(stTimer); stTimer = setTimeout(nextOrEnd, 12000); const b = $('.cap-bar i', cap); if (b) { b.style.transition = 'none'; b.style.width = '0'; requestAnimationFrame(() => requestAnimationFrame(() => { b.style.transition = 'width 12000ms linear'; b.style.width = '100%'; })); } } };
         ctx.addEventListener('pointerdown', hold); ctx.addEventListener('wheel', hold, { passive: true });
+        ctx.addEventListener('click', () => { if (ctx.classList.contains('more') || ctx.classList.contains('open')) ctx.classList.toggle('open'); });   // おすと広がる
       }
       // 残り時間のバー（読み上げ中は、読みおわるまで）
       const bar = $('.cap-bar i', cap);

@@ -250,7 +250,7 @@ registerTool('quiz', {
           <div class="score">${score} / ${qs.length}</div>
           <div style="font-size:30px;color:#d4a017">${stars}</div>
           <p>${score === qs.length ? 'パーフェクト！' : 'まちがえた問題は「📝 復習」で、もう一度とけます。'}</p>
-          ${misses.length ? `<div class="qmiss"><b>まちがえた問題</b><ol>${misses.map(m => `<li><span class="qq">${esc(m.q.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90))}</span><br><span class="qa">正解：${esc(m.c[m.a])}</span></li>`).join('')}</ol></div>` : ''}
+          ${misses.length ? `<div class="qmiss"><b>まちがえた問題</b><ol>${misses.map(m => `<li><span class="qq">${esc(m.q.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().replace(/^(.{88}).+$/, '$1…'))}</span><br><span class="qa">正解：${esc(m.c[m.a])}</span></li>`).join('')}</ol></div>` : ''}
           <button type="button" class="btn primary">もう一度</button> <button type="button" class="btn">設定にもどる</button>
           ${wrongList().length ? `<button type="button" class="btn rv2">📝 復習（${wrongList().length}問）</button>` : ''}
           <div style="margin-top:10px"><a class="chip" href="#record">📊 学習の記録を見る</a></div>

@@ -86,11 +86,13 @@ const lifeStoryOf = pid => STORIES.find(s => s.kind === 'person' && s.person ===
 
 // --- 画像資料（ウィキメディア・コモンズから読みこむ。ネットにつながっていないときは出さない） ---
 const IMAGES = {};
+// 作者名が2回くっついている（例：Unknown authorUnknown author）ときは1回に
+const cleanArtist = a => { a = String(a || '').trim(); const h = a.length / 2; return a.length % 2 === 0 && a.slice(0, h) === a.slice(h) ? a.slice(0, h) : a; };
 const commonsUrl = (file, w) => `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file.replace(/ /g, '_'))}?width=${w}`;
 function figureHtml(key, max = 1) {
   const ms = (IMAGES[key] || []).slice(0, max);
   return ms.map(m => `<figure class="fig"><img src="${esc(commonsUrl(m.file, 480))}" data-big="${esc(commonsUrl(m.file, 1400))}" alt="${esc(m.what || '')}" loading="lazy" onerror="this.closest('figure').remove()">
-    <figcaption>${esc(m.what || '')}<span class="credit">${m.artist ? esc(m.artist) + '・' : ''}${esc(m.license || '')}・<a href="${esc(m.page || '#')}" target="_blank" rel="noopener">コモンズ</a></span></figcaption></figure>`).join('');
+    <figcaption>${esc(m.what || '')}<span class="credit">${m.artist ? esc(cleanArtist(m.artist)) + '・' : ''}${esc(m.license || '')}・<a href="${esc(m.page || '#')}" target="_blank" rel="noopener">コモンズ</a></span></figcaption></figure>`).join('');
 }
 // 一覧のカード用の小さな画像（リンクを入れない）
 function thumbHtml(key) {

@@ -131,7 +131,7 @@ registerTool('glossary', {
       store.set('glossF', st);
       const m = termMastered();
       rows = GLOSSARY.filter(g => (!st.rank || String(g.rank || 1) === st.rank) && (!st.region || g.region === st.region) && (!st.era || (g.year != null && eraOf(g.year) === st.era)) && (!st.cat || g.cat === st.cat) && (!st.course || (g.course || []).includes(st.course)) && (!st.hide || !m[g.term]) && (!st.q || (g.term + (g.yomi || '') + g.def).includes(st.q)))
-        .sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999));
+        .sort((a, b) => (st.q ? ((b.term + (b.yomi || '')).includes(st.q) - (a.term + (a.yomi || '')).includes(st.q)) : 0) || (a.year ?? 9999) - (b.year ?? 9999));   // 探したときは、用語の名前に入っているものを先に
       const all = GLOSSARY.filter(g => !st.rank || String(g.rank || 1) === st.rank), done = all.filter(g => m[g.term]).length;
       info.textContent = `${rows.length}語（この重要度で覚えた語：${done} / ${all.length}）`;
       list.innerHTML = ''; shown = 0; page();

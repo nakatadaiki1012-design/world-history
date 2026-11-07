@@ -16,7 +16,9 @@
     const ov = el('<div class="tour" role="dialog" aria-label="使い方の案内"><div class="tour-hole"></div><div class="tour-tip"><b class="tt"></b><p class="tx"></p><div class="tour-btns"><button type="button" class="btn skip">スキップ</button><span class="tour-n muted"></span><button type="button" class="btn primary nx">次へ</button></div></div></div>');
     document.body.appendChild(ov);
     const hole = $('.tour-hole', ov), tip = $('.tour-tip', ov);
-    const end = () => { ov.remove(); store.set('tourDone', 1); window.removeEventListener('resize', place); };
+    const onKey = e => { if (e.key === 'Escape') end(); };
+    const end = () => { ov.remove(); store.set('tourDone', 1); window.removeEventListener('resize', place); document.removeEventListener('keydown', onKey); };
+    document.addEventListener('keydown', onKey);
     function place() {
       const s = steps[i], e = find(s.sel); if (!e) { next(); return; }
       if (e.scrollIntoView) e.scrollIntoView({ block: 'nearest' });
@@ -36,6 +38,7 @@
     $('.skip', tip).addEventListener('click', end);
     window.addEventListener('resize', place);
     place();
+    $('.nx', tip).focus();
   }
   window.startTour = run;
   // はじめて地図を開いたときだけ（地図が出て、少ししてから）

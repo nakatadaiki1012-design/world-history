@@ -1123,6 +1123,9 @@ function createHistMap(host, opts = {}) {
     [-1000, 1, 1000, 1500, 1800, 1900].forEach(y => {
       ruler.appendChild(el(`<div class="tick" style="left:${yearToPos(y)}%">${y < 0 ? '前' + (-y) : y === 1 ? '1' : y}</div>`));
     });
+    // 目盛りの数字が重なるときは、あとのものをかくす（小さな画面で「18001900」とつながらないように）
+    const pruneTicks = () => { let last = -1e9; $$('.tick', ruler).forEach(t => { t.style.visibility = ''; const r = t.getBoundingClientRect(); if (r.width && r.left < last + 4) t.style.visibility = 'hidden'; else last = r.right; }); };
+    requestAnimationFrame(pruneTicks); new ResizeObserver(pruneTicks).observe(ruler);
     // 時代のジャンプ
     const eras = [[-2500, '前2500'], [-1300, '前1300'], [-500, '前500'], [-330, '前330'], [-200, '前200'], [100, '100'], [400, '400'], [560, '560'], [750, '750'], [1000, '1000'], [1100, '1100'], [1280, '1280'], [1400, '1400'], [1550, '1550'], [1650, '1650'], [1750, '1750'], [1815, '1815'], [1880, '1880'], [1914, '1914'], [1939, '1939'], [1950, '1950'], [1975, '1975'], [2000, '2000']];
     const eb = $('.hm-eras', root);
@@ -1158,6 +1161,11 @@ function createHistMap(host, opts = {}) {
   $('.x', setBox).addEventListener('click', () => { setBox.hidden = true; gear.setAttribute('aria-expanded', 'false'); });
   setBox.addEventListener('click', e => e.stopPropagation());
   setBox.addEventListener('pointerdown', e => e.stopPropagation());
+  // 外をおす・Esc で閉じる（スマホでも）
+  const closeSet = () => { if (!setBox.hidden) { setBox.hidden = true; gear.setAttribute('aria-expanded', 'false'); } };
+  const onSetDown = e => { if (!setBox.hidden && !setBox.contains(e.target) && !gear.contains(e.target)) closeSet(); };
+  const onSetKey = e => { if (e.key === 'Escape') closeSet(); };
+  document.addEventListener('pointerdown', onSetDown, true); document.addEventListener('keydown', onSetKey);
   $$('[data-l]', setBox).forEach(c => {
     const k = c.dataset.l; c.checked = !!st.layers[k];
     c.addEventListener('change', () => { st.layers[k] = c.checked; store.set('layers', st.layers); requestDraw(); if (k === 'terrain') { updateTerrain(); scheduleRelief(true); } });
@@ -1267,6 +1275,6 @@ function createHistMap(host, opts = {}) {
     },
     people: () => shownPeople.filter(x => !x.ghost),
     events: () => shownEvents,
-    destroy() { stop(); ro.disconnect(); window.removeEventListener('bigtext', onBig); document.removeEventListener('pointerdown', onDown, true); document.removeEventListener('pointerdown', onPtr, true); window.removeEventListener('lateready', onLate); root.remove(); }
+    destroy() { stop(); ro.disconnect(); document.removeEventListener('pointerdown', onSetDown, true); document.removeEventListener('keydown', onSetKey); window.removeEventListener('bigtext', onBig); document.removeEventListener('pointerdown', onDown, true); document.removeEventListener('pointerdown', onPtr, true); window.removeEventListener('lateready', onLate); root.remove(); }
   };
 }

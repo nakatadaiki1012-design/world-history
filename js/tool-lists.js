@@ -93,7 +93,7 @@ registerTool('events', {
     const PAGE = 150;
     function renderMore() {
       rows.slice(shown, shown + PAGE).forEach(({ e, i }) => {
-        const head = sortMode === 'region' ? (REGION[e.region] || {}).name : `${eraOf(e.year)}・${centLabel(centOf(e.year))}`;   // 世紀ごとに見出し
+        const head = sortMode === 'region' ? (REGION[e.region] || {}).name : e.year < -3000 ? '先史（地図は前3000年から）' : `${eraOf(e.year)}・${centLabel(centOf(e.year))}`;   // 世紀ごとに見出し
         if (head !== lastHead) { list.appendChild(el(`<h3 class="lf-head">${esc(head || '')}</h3>`)); lastHead = head; }
         const fun = EVENT_FUN[e.title];
         list.appendChild(el(`<a class="evrow" href="${mapHash(e.year, REGION_VIEW_OF[e.region] || 'world', 'e:' + i)}">

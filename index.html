@@ -629,6 +629,43 @@ a.btn.primary { color: var(--accent-ink, #fff); }
   .backlink { display: inline-block; padding: 7px 4px; }
 }
 .hm-row .yr::after { content: ' ✎'; font-size: .55em; opacity: .5; font-family: var(--font-body); }   /* 押すと年を入力できる合図 */
+
+/* --- 2回目の検証で見つかった見た目の直し --- */
+/* 小さなスマホ：物語のボタンは2行に折り返してでも全部見えるように */
+@media (max-width: 380px) { .cap-ctl { flex-wrap: wrap; row-gap: 4px; } .cap-ctl [data-a=size] { display: none; } }
+/* テロップの文は、おすと広がる（もう一度おすと戻る） */
+.cap-text.open { max-height: 45vh; max-height: 45dvh; }
+/* スマホ：表示の設定は画面の下から出す（中だけ小さくスクロールしない） */
+@media (max-width: 720px) {
+  .hm-set { position: fixed; left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 72vh; max-height: 72dvh; z-index: 80; box-shadow: 0 -4px 28px rgba(0,0,0,.3); }
+  .hm-set-h .x { min-width: 40px; min-height: 40px; font-size: 18px; }
+}
+/* スマホ：年表の地域ボタンは1行で横にすべらせる */
+@media (max-width: 720px) {
+  .chrono-head { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); }
+  .chrono-head::-webkit-scrollbar { display: none; }
+  .chrono-head > * { flex: none; }
+}
+/* 横にすべらせる列には、右はしをうすくして「続きがある」合図 */
+.hm-views, .ptl-roles { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); }
+/* スマホ：授業の地図は、ボタンを減らして広く */
+@media (max-width: 900px) { .lesson .hm-tools .regbtn, .lesson .hm-tools .gear, .lesson .hm-views { display: none !important; } .lesson .hm { min-height: 260px; } }
+/* リンクの色を、ほかのボタンや文字にそろえる */
+.rec a:not(.chip):not(.btn):not(.term), .cards a:not(.chip):not(.btn):not(.term), .qbox a:not(.chip):not(.btn):not(.term) { color: var(--accent); }
+.cards .score, .qbox .score { white-space: nowrap; }
+.rec .card { padding: 12px 14px; }
+.rec .course-head { text-align: left; }
+/* スマホ：授業の一覧は、題の下に小見出し。数字は折り返さない */
+@media (max-width: 720px) {
+  .unit ol button { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; }
+  .unit ol button .s { grid-column: 2; margin-left: 0; white-space: normal; }
+}
+.unit summary .prog { white-space: nowrap; }
+/* スマホ：人物の大きな写真は小さめに */
+@media (max-width: 720px) { .bigimg { width: 76px; height: 76px; } }
+/* 暗い画面：えらんでいる切りかえボタンを明るく目立たせる */
+:root[data-theme="dark"] .subs button[aria-current="true"], :root[data-theme="dark"] .lf-tabs button[aria-pressed="true"] { background: color-mix(in srgb, var(--panel) 70%, #fff 22%); color: #fff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .subs button[aria-current="true"], :root:not([data-theme="light"]) .lf-tabs button[aria-pressed="true"] { background: color-mix(in srgb, var(--panel) 70%, #fff 22%); color: #fff; } }
 .qmiss { text-align: left; margin: 10px auto; max-width: 560px; font-size: 14px; }
 .qmiss ol { padding-left: 1.4em; margin: 6px 0; }
 .qmiss li { margin: 6px 0; }

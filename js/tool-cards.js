@@ -94,7 +94,7 @@ registerTool('cards', {
         $('.again', c).addEventListener('click', () => grade('again'));
         $('.hard', c).addEventListener('click', () => grade('hard'));
         $('.good', c).addEventListener('click', () => grade('good'));
-        $('.quit', c).addEventListener('click', finish);
+        $('.quit', c).addEventListener('click', () => { if (i === 0 || confirm('ここでやめますか？（ここまでの記録は残ります）')) finish(); });
         card.focus({ preventScroll: true });
       }
       function finish() {
@@ -106,7 +106,7 @@ registerTool('cards', {
           <div class="score">◯ ${tally.good}　△ ${tally.hard}　✕ ${tally.again}</div>
           <p>${tally.good && !tally.again ? 'よくできました！' : '「✕」のカードは、すぐにまた出てきます。'}</p>
           <button type="button" class="btn primary">つづける</button> <button type="button" class="btn">設定にもどる</button>
-          <div style="margin-top:10px"><a href="#record" style="font-size:13.5px">📊 学習の記録を見る</a></div>
+          <div style="margin-top:10px"><a class="chip" href="#record">📊 学習の記録を見る</a></div>
         </div>`);
         const bs = $$('button', r); bs[0].addEventListener('click', start); bs[1].addEventListener('click', setup);
         box.appendChild(r);

@@ -174,7 +174,8 @@ registerTool('econ', {
       const xy = y => x(y2p(y));
       // 横軸
       const ax = csvg.append('g').attr('class', 'c-axis');
-      [1, 1000, 1500, 1700, 1820, 1900, 1950, 2000].forEach(y => { ax.append('line').attr('x1', xy(y)).attr('x2', xy(y)).attr('y1', m.t).attr('y2', H - m.b).attr('stroke-dasharray', '2 4'); ax.append('text').attr('x', xy(y)).attr('y', H - 6).attr('text-anchor', 'middle').text(y); });
+      // せまい画面では目盛りを減らす（数字が重ならないように）。目盛りの間かくは一定ではない（新しい時代ほど広い）
+      (W < 520 ? [1, 1000, 1500, 1820, 1950] : [1, 1000, 1500, 1700, 1820, 1900, 1950, 2000]).forEach(y => { ax.append('line').attr('x1', xy(y)).attr('x2', xy(y)).attr('y1', m.t).attr('y2', H - m.b).attr('stroke-dasharray', '2 4'); ax.append('text').attr('x', xy(y)).attr('y', H - 6).attr('text-anchor', 'middle').text(y); });
       if (ind === 'share') {
         // 地域別の割合を積み上げ
         const ys = YEARS.filter(y => y >= 1820 && (y % 5 === 0 || y === 2018));
@@ -195,7 +196,9 @@ registerTool('econ', {
         const yS = (log ? d3.scaleLog().domain([Math.max(lo * 0.8, 1e-3), hi * 1.2]) : d3.scaleLinear().domain([0, hi * 1.05])).range([H - m.b, m.t]).nice();
         const fmt = ECON_IND.find(d => d.id === ind).fmt;
         csvg.append('g').attr('class', 'c-axis').call(d3.axisLeft(yS).ticks(4, log ? '~s' : undefined).tickFormat(v => fmt(v).replace(/ドル|人/, ''))).attr('transform', `translate(${m.l},0)`);
-        const col = s => (REGION[s.c.region] || {}).color || '#888';
+        // 国ごとにちがう色（同じ地域の国も見分けられるように）
+        const PAL = ['#c0392b', '#1f5f8b', '#d68910', '#27ae60', '#8e44ad', '#16a085', '#7f8c8d', '#e84393', '#2c3e50', '#a0522d', '#00a8cc', '#6c5ce7'];
+        const col = s => PAL[series.indexOf(s) % PAL.length];
         const ln = d3.line().x(p => xy(p[0])).y(p => yS(p[1])).curve(d3.curveMonotoneX);
         csvg.append('g').selectAll('path').data(series).join('path').attr('fill', 'none').attr('stroke', col).attr('stroke-width', 2.2).attr('d', s => ln(s.pts));
         // 右はしに名前（重ならないように少しずらす）

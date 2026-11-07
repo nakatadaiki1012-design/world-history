@@ -20,7 +20,7 @@
     const out = [];
     index.forEach(it => {
       let sc = 0;
-      it.keys.forEach(x => { const v = x === k ? 100 : x.startsWith(k) ? 60 - Math.min(20, x.length - k.length) : x.includes(k) ? 30 - Math.min(15, x.length - k.length) : 0; if (v > sc) sc = v; });
+      it.keys.forEach((x, i) => { let v = x === k ? 100 : x.startsWith(k) ? 60 - Math.min(20, x.length - k.length) : x.includes(k) ? 30 - Math.min(15, x.length - k.length) : 0; if (i > 1) v *= 0.7; if (v > sc) sc = v; });   // 名前・よみ以外（別名など）での一致は少し下げる
       if (sc) out.push({ it, sc: sc * it.w });
     });
     return out.sort((a, b) => b.sc - a.sc).map(o => o.it);
@@ -48,7 +48,17 @@
       const r = search(inp.value);
       res.innerHTML = '';
       if (!inp.value.trim()) return;
-      if (!r.length) { res.innerHTML = '<p class="muted">見つかりませんでした。ちがう書き方（カタカナ・ひらがな）でも試してみてください。</p>'; return; }
+      // 年（例：1453、前221）を入れたら、その年の地図へ
+      const ym = inp.value.trim().replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).match(/^(前|紀元前|BC)?\s*(\d{1,4})\s*年?$/i);
+      if (ym) {
+        const y = fixYear((ym[1] ? -1 : 1) * +ym[2]);
+        const sec = el(`<div class="sr-sec"><h3>🗺 年</h3><ul class="lst"></ul></div>`);
+        const li = el(`<li><a href="${esc(mapHash(y, 'world'))}"><b>${esc(yearLabel(y))}の世界地図を見る</b> <span class="muted" style="font-size:12.5px">${esc(eraName(y))}</span></a></li>`);
+        $('a', li).addEventListener('click', close); $('ul', sec).appendChild(li);
+        EVENTS.map((e, i) => ({ e, i })).filter(({ e }) => Math.abs(e.year - y) <= 3).slice(0, 8).forEach(({ e, i }) => { const a = el(`<li><a href="${esc(mapHash(e.year, REGION_VIEW_OF[e.region] || 'world', 'e:' + i))}"><b>${esc(e.title)}</b> <span class="muted" style="font-size:12.5px">${esc(yearLabel(e.year))}</span></a></li>`); $('a', a).addEventListener('click', close); $('ul', sec).appendChild(a); });
+        res.appendChild(sec);
+      }
+      if (!r.length && !ym) { res.innerHTML = '<p class="muted">見つかりませんでした。ちがう書き方（カタカナ・ひらがな）でも試してみてください。</p>'; return; }
       // いちばん合うものを上に、そのあと種類ごと
       ORDER.forEach(type => {
         const g = r.filter(x => x.type === type); if (!g.length) return;
