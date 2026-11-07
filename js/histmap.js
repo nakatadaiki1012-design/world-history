@@ -271,8 +271,18 @@ function createHistMap(host, opts = {}) {
   // 地形などのデータがあとから届いたら、かき直す
   function onLate() { if (pr) { buildTerrain(); requestDraw(); } }   // 地形の層だけ作る（土台はかき直さない）
   window.addEventListener('lateready', onLate, { once: true });   // 地形が届いたら1回だけかき直す
+  // 地域の地図（地球儀の形）では、中心から離れすぎた所（80°より遠い）の点は出さない。
+  // 形（国・陸）は切り取られるのに、点だけが丸い縁の外（宇宙）に出てしまうため
+  function farCut(raw, view) {
+    const v = GEO.VIEWS[view];
+    if (!v || view === 'world' || !v.center) return raw;
+    const ctr = v.center, LIM = 80 * Math.PI / 180;
+    const f = ll => (ll && d3.geoDistance(ll, ctr) > LIM ? null : raw(ll));
+    ['invert', 'stream', 'rotate', 'scale', 'translate', 'clipAngle', 'center', 'fitExtent', 'precision'].forEach(k => { if (raw[k]) f[k] = raw[k].bind(raw); });
+    return f;
+  }
   function buildBase() {
-    pr = GEO.projection(st.view, st.w, st.h);
+    pr = farCut(GEO.projection(st.view, st.w, st.h), st.view);
     labelCache.clear();
     detailK = Math.pow(2, Math.max(0, Math.floor(Math.log2(st.k || 1))));
     path = makePath(detailK);
