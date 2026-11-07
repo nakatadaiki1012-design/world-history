@@ -213,6 +213,7 @@ function createHistMap(host, opts = {}) {
     zoom.extent([[0, 0], [w, h]]).translateExtent([[-w * 0.6, -h * 0.6], [w * 1.6, h * 1.6]]);
     buildBase();
     if (st.cam) { zsel.interrupt(); flyTo(st.cam.lon, st.cam.lat, st.cam.span, null, 0); }
+    else if (!drawnOnce && st.k === 1) fitWorldTall();
     requestDraw();
   }
 
@@ -1069,6 +1070,12 @@ function createHistMap(host, opts = {}) {
     return Math.max(s, need);
   }
 
+  // スマホなど縦長の画面で世界地図を開くと、上下が海ばかりになるので、少し寄せてユーラシアを中心に（つまんで引けば全体）
+  function fitWorldTall() {
+    if (opts.mini || st.view !== 'world' || !pr || st.h < st.w * 0.75) return;
+    const k = Math.min(1.9, st.h / (st.w * 0.52)), q = pr([75, 28]); if (!q) return;
+    zsel.call(zoom.transform, d3.zoomIdentity.translate(st.w / 2 - k * q[0], st.h * 0.52 - k * q[1]).scale(k));
+  }
   function flyTo(lon, lat, span, view, dur = 1500, keep) {
     if (view && GEO.VIEWS[view] && view !== st.view) setView(view);
     if (keep) span = autoSpan(lon, lat, span, keep === true ? [] : keep);
@@ -1229,7 +1236,7 @@ function createHistMap(host, opts = {}) {
     st.view = v;
     labelCache.clear();
     buildBase();
-    if (!keepZoom) { st.t = d3.zoomIdentity; zsel.call(zoom.transform, d3.zoomIdentity); }
+    if (!keepZoom) { st.t = d3.zoomIdentity; zsel.call(zoom.transform, d3.zoomIdentity); fitWorldTall(); }
     requestDraw();
     if (opts.onView) opts.onView(v);
   }
