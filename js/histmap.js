@@ -848,7 +848,7 @@ function createHistMap(host, opts = {}) {
         }
         select({ type: 'place', id: d.pl.id });
       })
-      .on('mousemove', (ev, d) => showTip(ev, `<b>${esc(d.name)}</b>${(() => { const m = d.pl.modern; if (!m || m === d.name) return ''; const r = m.startsWith(d.name) ? m.slice(d.name.length).replace(/^（(.*)）$/, '$1') : m; return r ? `（今の${esc(r)}）` : ''; })()}<br><span style="font-size:12px">${esc(d.pl.text || '')}</span>`))
+      .on('mousemove', (ev, d) => showTip(ev, placeTipHtml(d)))
       .on('mouseleave', hideTipMouse);
     pe2.append('line').attr('class', 'lead');
     pe2.append('path').attr('d', 'M0,-4.5L4.5,0L0,4.5L-4.5,0Z');
@@ -953,6 +953,7 @@ function createHistMap(host, opts = {}) {
   // 説明ボックスは、出し入れで「消す・出す」をせず、透明にする・ずらすだけ（ページの並びの計算をやり直さない＝地図を描きなおさない）
   tip.classList.add('ftip'); tip.hidden = false;
   let tipHtml = '', tipW = 0, tipH = 0;
+  function placeTipHtml(d) { return `<b>${esc(d.name)}</b>${(() => { const m = d.pl.modern; if (!m || m === d.name) return ''; const r = m.startsWith(d.name) ? m.slice(d.name.length).replace(/^（(.*)）$/, '$1') : m; return r ? `（今の${esc(r)}）` : ''; })()}<br><span style="font-size:12px">${esc(d.pl.text || '')}</span>`; }
   function showTip(ev, html) {
     if (opts.mini) return;
     const r = stage.getBoundingClientRect();
@@ -976,6 +977,23 @@ function createHistMap(host, opts = {}) {
   // スマホでは指が「はなれた」ことがわからないので、どこかをタップしたら一度消す（地名をタップしたときは、そのあとで出し直す）
   const onDown = () => hideTip();
   document.addEventListener('pointerdown', onDown, true);
+  // 指でタップしたとき：近く（印から22px、または地名の文字のまわり8px）に地名があれば、国より地名を優先する
+  svgEl.addEventListener('click', ev => {
+    if (opts.mini || ev.target.closest('.hm-plc, .hm-person, .hm-ev, .hm-stop')) return;
+    const touch = lastPtr === 'touch', R = touch ? 22 : 9, M = touch ? 8 : 3;
+    let best = null, bd = 1e9;
+    gPlc.selectAll('g.hm-plc').each(function (d) {
+      const pr0 = this.querySelector('path').getBoundingClientRect(), tx = this.querySelector('text').getBoundingClientRect();
+      const px = pr0.x + pr0.width / 2, py = pr0.y + pr0.height / 2;
+      let dd = Math.hypot(px - ev.clientX, py - ev.clientY);
+      if (tx.width && ev.clientX > tx.left - M && ev.clientX < tx.right + M && ev.clientY > tx.top - M && ev.clientY < tx.bottom + M) dd = Math.min(dd, 2);
+      if (dd < R && dd < bd) { bd = dd; best = d; }
+    });
+    if (!best) return;
+    ev.stopPropagation(); ev.preventDefault();
+    select({ type: 'place', id: best.pl.id });
+    showTip(ev, placeTipHtml(best));
+  }, true);
   svg.on('click', () => { const sb = $('.hm-set', root); if (sb && !sb.hidden) { sb.hidden = true; $('.gear', root).setAttribute('aria-expanded', 'false'); return; } if (st.sel) select(null); });
 
   // --- 物語：地点・進路・川などを描く（画面の座標で。拡大しても線の太さは同じ） ---
