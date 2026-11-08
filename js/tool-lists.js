@@ -60,20 +60,27 @@ registerTool('stories', {
       ss.sort((a, b) => (qHit(b) - qHit(a)) || (st.sort === 'region' ? regionIndex(a.region) - regionIndex(b.region) || a.steps[0].year - b.steps[0].year : (st.sort === 'year-desc' ? -1 : 1) * (a.steps[0].year - b.steps[0].year)));
       cnt.textContent = `${ss.length}本`;
       grid.innerHTML = '';
-      let lastHead = '';
-      ss.forEach(s => {
+      let lastHead = '', shown = 0;
+      // 一度に全部は並べない（スマホで重く・長くなりすぎるので）。下まで見たら続きを足す
+      const PAGE = 48, seenAll = store.get('storySeen', {});
+      const more = el('<button type="button" class="btn" style="display:block;margin:14px auto;grid-column:1/-1">もっと見る</button>');
+      const addPage = () => { more.remove(); ss.slice(shown, shown + PAGE).forEach(card); shown += PAGE; if (shown < ss.length) { more.textContent = `もっと見る（あと ${ss.length - shown} 本）`; grid.appendChild(more); io.observe(more); } };
+      const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); addPage(); } }, { rootMargin: '600px' });
+      more.addEventListener('click', addPage);
+      function card(s) {
         const head = st.q && qHit(s) ? '題名に「' + st.q + '」' : st.sort === 'region' ? (REGION[s.region] || {}).name : eraOf(s.steps[0].year);
         if (head !== lastHead) { grid.appendChild(el(`<h3 class="lf-head">${esc(head || '')}</h3>`)); lastHead = head; }
         const col = (REGION[s.region] || {}).color || '#555';
         const talk = s.steps.some(x => x.talk);
-        const seen = (store.get('storySeen', {}))[s.id];
+        const seen = seenAll[s.id];
         grid.appendChild(el(`<a class="pcard" style="--c:${col};text-decoration:none;color:inherit" href="#story/${esc(s.id)}/1">
           ${thumbHtml(`story:${s.id}:1`)}
           ${seen ? `<span class="seen${seen.done ? ' done' : ''}">${seen.done ? '✓ 見た' : `${seen.n}/${s.steps.length}`}</span>` : ''}<b>${storyKind(s) === 'person' ? '👤' : storyKind(s) === 'theme' ? '🧭' : storyKind(s) === 'term' ? (TERM_STORY_ICON[s.tcat] || '📘') : '▶'} ${esc(s.title)}</b>
           <span class="m">${esc(STORY_KIND[storyKind(s)])}${s.theme ? '（' + esc(THEME_NAME[s.theme] || '') + '）' : ''}${s.tcat ? '（' + esc(s.tcat) + '）' : ''}・${esc(s.period || '')}・${s.steps.length}場面・${esc((REGION[s.region] || {}).name || '')}${talk ? '・🎙 語りつき' : ''}</span>
           <span class="t">${esc(s.summary || '')}</span>
         </a>`));
-      });
+      }
+      addPage();
       if (!ss.length) grid.appendChild(el('<p class="empty">この条件の物語はありません。</p>'));
     });
   }

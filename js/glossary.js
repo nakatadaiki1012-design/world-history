@@ -1,10 +1,36 @@
 /* 用語集：ウィキのように、本文の用語をおすとその用語のページ（小さな窓）が開く。用語集の一覧ページとクイズにも使う */
 const GLOSSARY = [];
 const TERM = {};
+// 同じものの別の書き方（『論語』と論語、楔形文字とくさび形文字、アジア=アフリカ会議とアジア・アフリカ会議 など）は1つにまとめる。
+// まとめた方の名前は「別名」として残し、本文のリンクからも同じ説明が開く。説明が似ていないもの（三国時代と三国時代（朝鮮）など）はまとめない
+const TERM_ALIAS = {};
 function absorbGlossary() {
-  const seen = new Set();
+  const seen = new Set(), list = [];
+  (window.GLOSSARY || []).forEach(g => { if (g && g.term && g.def && !seen.has(g.term)) { seen.add(g.term); list.push(g); } });
+  const nterm = t => String(t).replace(/[『』「」]/g, '').replace(/[=＝・\s　]/g, '').replace(/（.*?）|\(.*?\)/g, '');
+  const nyomi = y => String(y || '').replace(/[=＝・\s　]/g, '').replace(/（.*?）|\(.*?\)/g, '');
+  const bi = t => { const o = new Set(); for (let i = 0; i < t.length - 1; i++) o.add(t.slice(i, i + 2)); return o; };
+  const similar = (a, b) => { const A = bi(a.def), B = bi(b.def); let k = 0; A.forEach(x => { if (B.has(x)) k++; }); return k / Math.min(A.size, B.size) > 0.3; };
+  const plain = g => (/[『』「」（(]/.test(g.term) ? 0 : 1);   // かっこのない名前を残す方に
+  const better = (a, b) => ((b.rank || 1) - (a.rank || 1)) || (plain(b) - plain(a)) || (b.def.length - a.def.length);
+  const groups = new Map();
+  list.forEach(g => { const k = nterm(g.term); (groups.get(k) || groups.set(k, []).get(k)).push(g); const y = nyomi(g.yomi); if (y && y !== k) { const ky = 'y:' + y; (groups.get(ky) || groups.set(ky, []).get(ky)).push(g); } });
+  // 読みだけが同じもの（紅巾の乱と黄巾の乱など）は、年が近いときだけ同じものとみなす
+  const yearOk = (a, b) => a.year == null || b.year == null || Math.abs(a.year - b.year) <= Math.max(50, Math.abs(a.year) * 0.08);
+  const aliasOf = new Map();
+  groups.forEach(arr => {
+    if (arr.length < 2) return;
+    const rest = arr.filter(g => !aliasOf.has(g.term)).sort(better);
+    for (let i = 0; i < rest.length; i++) for (let j = i + 1; j < rest.length; j++) {
+      const a = rest[i], b = rest[j];
+      if (aliasOf.has(a.term) || aliasOf.has(b.term) || !similar(a, b) || (nterm(a.term) !== nterm(b.term) && !yearOk(a, b))) continue;
+      aliasOf.set(b.term, a.term);
+    }
+  });
   GLOSSARY.length = 0;
-  (window.GLOSSARY || []).forEach(g => { if (g && g.term && g.def && !seen.has(g.term)) { seen.add(g.term); GLOSSARY.push(g); TERM[g.term] = g; } });
+  Object.keys(TERM).forEach(k => delete TERM[k]); Object.keys(TERM_ALIAS).forEach(k => delete TERM_ALIAS[k]);
+  list.forEach(g => { if (!aliasOf.has(g.term)) { GLOSSARY.push(g); TERM[g.term] = g; } });
+  aliasOf.forEach((main, alias) => { let m = main; while (aliasOf.has(m)) m = aliasOf.get(m); TERM[alias] = TERM[m]; TERM_ALIAS[alias] = m; const g = TERM[m]; (g.aliases = g.aliases || []).includes(alias) || g.aliases.push(alias); });
   _termRe = null;
 }
 const TERM_CAT_ORDER = ['国家・王朝', '人物', '事件・戦争', '条約・宣言', '制度・政策', '思想・宗教', '文化・学問', '経済・社会', '地名・地域', '組織・運動'];
@@ -13,7 +39,7 @@ const TERM_CAT_ORDER = ['国家・王朝', '人物', '事件・戦争', '条約�
 let _termRe = null;
 function termRe() {
   if (_termRe !== null) return _termRe;
-  const keys = GLOSSARY.map(g => g.term).filter(t => t.length >= 2).sort((a, b) => b.length - a.length);
+  const keys = GLOSSARY.map(g => g.term).concat(Object.keys(TERM_ALIAS)).filter(t => t.length >= 2).sort((a, b) => b.length - a.length);   // 別名でもリンクする
   _termRe = keys.length ? new RegExp(keys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g') : false;
   return _termRe;
 }
@@ -45,6 +71,7 @@ function setMastered(t, v) { const m = termMastered(); if (v) m[t] = 1; else del
 
 function openTerm(t) {
   const g = TERM[t]; if (!g) return;
+  t = g.term;   // 別名から開いたときも、まとめた方の名前で
   $$('.term-ov').forEach(x => x.remove());
   const reg = REGION[g.region];
   // この語が出てくる出来事・物語・人物
