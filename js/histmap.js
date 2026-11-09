@@ -312,12 +312,20 @@ function createHistMap(host, opts = {}) {
   let detailK = 1;
   function makePath(k) {
     const tol = 0.7 / k;
-    return d3.geoPath({ stream: out => pr.stream({
+    // 投影の前に、経度・緯度で近すぎる点をとばす（画面で 0.4 ピクセルにもならない点は、計算するだけむだ）
+    const sc = pr && pr.scale ? pr.scale() : 0, dt = sc > 0 ? tol * 0.6 * 180 / (Math.PI * sc) : 0;
+    const thin = dt > 0 ? s => ({
+      _x: 0, _y: 0, _n: 0, _px: 0, _py: 0, _p: false,
+      point(x, y) { if (this._n++ === 0 || Math.abs(x - this._x) + Math.abs(y - this._y) >= dt) { this._x = x; this._y = y; this._p = false; s.point(x, y); } else { this._px = x; this._py = y; this._p = true; } },
+      lineStart() { this._n = 0; this._p = false; s.lineStart(); }, lineEnd() { if (this._p) s.point(this._px, this._py); this._p = false; s.lineEnd(); },
+      polygonStart() { s.polygonStart(); }, polygonEnd() { s.polygonEnd(); }, sphere() { s.sphere && s.sphere(); }
+    }) : s => s;
+    return d3.geoPath({ stream: out => thin(pr.stream({
       _x: NaN, _y: NaN, _n: 0,
       point(x, y) { if (this._n === 0 || Math.abs(x - this._x) + Math.abs(y - this._y) >= tol) { this._x = x; this._y = y; out.point(x, y); } this._n++; },
       lineStart() { this._n = 0; out.lineStart(); }, lineEnd() { out.lineEnd(); },
       polygonStart() { out.polygonStart(); }, polygonEnd() { out.polygonEnd(); }, sphere() { out.sphere && out.sphere(); }
-    }) });
+    })) });
   }
   // 拡大のしかたが大きく変わったら、形を細かさに合わせて作りなおす
   // 一度計算した細かさの形はとっておく（拡大・縮小を行ったり来たりしても、すぐ出る）
@@ -625,7 +633,8 @@ function createHistMap(host, opts = {}) {
   let drawnOnce = false;
   function draw() {
     if (!pr) return;
-    if (!drawnOnce) { drawnOnce = true; requestAnimationFrame(() => window.dispatchEvent(new Event('mapdrawn'))); warmUp(); }
+    // 最初の1回は、大きな地名だけ置いて早く見せる（細かい名前は、見えてからすぐ足す）
+    if (!drawnOnce) { drawnOnce = true; st.scrub = true; requestAnimationFrame(() => { window.dispatchEvent(new Event('mapdrawn')); setTimeout(() => { st.scrub = false; placeOverlay(); }, 60); }); warmUp(); }
     const y = st.year;
     feats = GEO.politiesAt(y);
     // 勢力圏（斜線）
@@ -698,14 +707,24 @@ function createHistMap(host, opts = {}) {
   // --- 文字の幅をはかる（だいたいではなく、実際のフォントで） ---
   const mctx = document.createElement('canvas').getContext('2d');
   const mcache = new Map();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { mcache.clear(); textW.cw = {}; });
   function textW(str, px, display) {
     const key = str + '|' + px + '|' + (display ? 1 : 0);
     if (!mcache.has(key)) {
       if (!textW.ff) textW.ff = {}; const kk = display ? 'd' : 'b';
       if (textW.ff[kk] === undefined) textW.ff[kk] = getComputedStyle(document.documentElement).getPropertyValue(display ? '--font-map' : '--font-map-sans');
       const ff = textW.ff[kk];
-      mctx.font = `${display ? 800 : 700} ${px}px ${ff || 'sans-serif'}`;
-      mcache.set(key, mctx.measureText(str).width + (display ? str.length * px * 0.04 : 0));
+      // 1文字ずつ、100px の大きさで一度だけはかって覚えておき、足し合わせて大きさに合わせる（はかる回数がずっと少ない）
+      const cw = textW.cw || (textW.cw = {}), ck = kk + (ff || '');
+      const tbl = cw[ck] || (cw[ck] = new Map());
+      let sum = 0;
+      for (const ch of str) {
+        if (ch.charCodeAt(0) >= 0x3000 && ch.charCodeAt(0) < 0xff60) { sum += 100; continue; }   // 漢字・かな・全角の記号は、どれも1文字ぶんの幅（はからなくてよい）
+        let v = tbl.get(ch);
+        if (v === undefined) { mctx.font = `${display ? 800 : 700} 100px ${ff || 'sans-serif'}`; v = mctx.measureText(ch).width; tbl.set(ch, v); }
+        sum += v;
+      }
+      mcache.set(key, sum * px / 100 + (display ? str.length * px * 0.04 : 0));
     }
     return mcache.get(key);
   }

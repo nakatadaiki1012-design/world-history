@@ -61,9 +61,19 @@
   Object.values(VIEWS).forEach(v => { const [w, s, e, n] = v.bbox; v.center = [(w + e) / 2, (s + n) / 2]; v.span = e - w; });
 
 
+  // くわしい形のデータは小さくするため「0.01度単位の差」で書いてある。ふつうの [経度, 緯度] の列にもどす
+  function decodePrecise(D) {
+    if (!D) return null;
+    const out = {};
+    for (const id in D) {
+      const m = D[id], o = out[id] = {};
+      for (const k in m) o[k] = m[k].map(a => { const r = new Array(a.length / 2); let x = 0, y = 0; for (let i = 0, j = 0; i < a.length; i += 2, j++) { x += a[i]; y += a[i + 1]; r[j] = [x / 100, y / 100]; } return r; });
+    }
+    return out;
+  }
   // くわしい形（tools/geo で作ったもの）があれば、手で描いた形のかわりに使う
   (function applyPrecise() {
-    const P = W.PRECISE; if (!P) return;
+    const P = W.PRECISE || decodePrecise(W.PRECISE_D); if (!P) return;
     (W.POLITIES || []).forEach(p => {
       const m = P[p.id]; if (!m) return;
       (p.shapes || []).forEach(s => { const r = m[String(s.from)]; if (r && r.length) { s.rings = r; delete s.iso; } });
@@ -92,7 +102,13 @@
     if (!countries) {
       const t = W.WORLD_TOPO;
       countries = topojson.feature(t, t.objects.countries).features.filter(f => f.id !== '010');
-      land = topojson.merge(t, t.objects.countries.geometries.filter(g => g.id !== '010'));
+      // 陸地：データに入っている陸地の形から南極をのぞく（国を1つずつ合わせるより、ずっと速い）
+      if (t.objects.land) {
+        const L = topojson.feature(t, t.objects.land), gs = (L.features ? L.features.map(f => f.geometry) : [L.geometry || L]);
+        const cs = [];
+        gs.forEach(g => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates).forEach(p => { if (p[0].some(q => q[1] > -60)) cs.push(p); }));
+        land = { type: 'MultiPolygon', coordinates: cs };
+      } else land = topojson.merge(t, t.objects.countries.geometries.filter(g => g.id !== '010'));
     }
     return { countries, land };
   }
