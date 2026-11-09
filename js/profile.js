@@ -1,5 +1,10 @@
 /* 人物のくわしいプロフィール（「📖 もっと詳しく」）。画面いっぱいに開く読みもの */
 function hasProfile(id) { return !!PERSON_DETAIL[id]; }
+// 「💡 実はこんな人」の欄（なければ空）
+function personFunHtml(id) {
+  const a = PERSON_FUN[id];
+  return a && a.length ? `<div class="ev-fun p-fun">💡 <b>実はこんな人</b><ul>${a.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : '';
+}
 function profileBtn(id, label = '📖 もっと詳しく') {
   const b = el(`<button type="button" class="btn primary profbtn">${label}</button>`);
   b.addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); openProfile(id); });
@@ -26,6 +31,7 @@ function openProfile(id) {
       </header>
       ${ph ? `<div class="credit" style="padding:0 20px">肖像：${esc(ph.what || '')}・${esc(ph.license || '')}・<a href="${esc(ph.page || '#')}" target="_blank" rel="noopener">ウィキメディア・コモンズ</a></div>` : ''}
       <div class="prof-body">
+        ${personFunHtml(p.id)}
         <section class="prof-story">${(d.story || []).map(t => `<p>${linkTerms(t, p.name)}</p>`).join('')}</section>
         ${d.quote ? `<blockquote class="prof-quote">「${esc(d.quote.text)}」<cite>${esc(d.quote.note || '')}</cite></blockquote>` : ''}
         ${(d.episodes || []).length ? `<h3>エピソード</h3><div class="prof-eps">${d.episodes.map(e => `<div class="prof-ep">${e.legend ? '<span class="leg">言い伝え</span>' : /といわれ|と言われ|と伝え|という説|諸説|かもしれ|らしい/.test(e.text) ? '<span class="maybe">諸説あり</span>' : '<span class="fact">史実</span>'}<b>${esc(e.title)}</b><p>${esc(e.text)}</p></div>`).join('')}</div>` : ''}

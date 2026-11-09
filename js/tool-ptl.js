@@ -153,6 +153,7 @@ registerTool('ptl', {
           <h2>${esc(p.name)}</h2>
           <div class="num" style="font-weight:700">${esc(lifeSpan(p))}（${esc(p.role || '')}）</div>
           <p>${esc(p.text || '')}</p>
+          ${personFunHtml(p.id)}
           ${p.keys ? `<div class="keys">${p.keys.map(k => `<span>${esc(k)}</span>`).join('')}</div>` : ''}
         </div>`));
         if (hasProfile(p.id)) body.appendChild(profileBtn(p.id));

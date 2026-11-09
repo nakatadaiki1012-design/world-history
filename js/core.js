@@ -65,6 +65,7 @@ function nearPlace(lon, lat, d = 0.35) {
   return best;
 }
 const EVENT_FUN = {};
+const PERSON_FUN = {};   // 人物の「💡 実はこんな人」（id → 3つの一言）
 const ERA_BINS = [[-9999, 500, '古代'], [500, 1500, '中世'], [1500, 1800, '近世'], [1800, 1914, '近代'], [1914, 9999, '現代']];
 // 世紀（前1世紀＝-1、1世紀＝1）
 const centOf = y => (y > 0 ? Math.ceil(y / 100) : -Math.ceil(-y / 100 || 1));
@@ -125,6 +126,7 @@ function absorbLate() {
   STORIES.forEach(s => { STORY[s.id] = s; });
   Object.assign(PERSON_DETAIL, window.PERSON_DETAIL || {});
   Object.assign(EVENT_FUN, window.EVENT_FUN || {});
+  Object.assign(PERSON_FUN, window.PERSON_FUN || {});
   Object.keys(IMAGES).forEach(k => delete IMAGES[k]);
   (window.IMAGES || []).forEach(m => { if (m && m.key && m.file) (IMAGES[m.key] = IMAGES[m.key] || []).push(m); });
   fill(CAUSES, (window.CAUSES || []).filter(c => c && EVENT_IDX[c.from] != null && EVENT_IDX[c.to] != null));

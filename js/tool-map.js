@@ -241,6 +241,7 @@ registerTool('map', {
         <div class="num" style="font-weight:700">${esc(span(p.start, p.end))}</div>
         ${capitalText(p)}
         <p>${linkTerms(p.text || '', p.name)}</p>
+        ${personFunHtml(p.id)}
         ${p.keys && p.keys.length ? `<div class="keys">${p.keys.map(k => TERM[k] ? `<a class="term" data-term="${esc(k)}" href="#term/${encodeURIComponent(k)}"><span>${esc(k)}</span></a>` : `<span>${esc(k)}</span>`).join('')}</div>` : ''}
         ${p.tags ? `<div class="muted" style="font-size:12.5px">${p.tags.map(t => COURSE[t]).filter(Boolean).join('・')}</div>` : ''}
         ${figureHtml('polity:' + p.id, 2)}
@@ -275,7 +276,7 @@ registerTool('map', {
     }
     function personDetail(p) {
       body.appendChild(back());
-      { const r = el('<div style="float:right"></div>'); r.appendChild(speakBtn(() => `${p.name}。${p.role || ''}。${lifeSpan(p)}。${p.text || ''}`)); body.appendChild(r); }
+      { const r = el('<div style="float:right"></div>'); r.appendChild(speakBtn(() => `${p.name}。${p.role || ''}。${lifeSpan(p)}。${p.text || ''}${PERSON_FUN[p.id] ? '。実はこんな人。' + PERSON_FUN[p.id].join('') : ''}`)); body.appendChild(r); }
       const reg = REGION[p.region];
       const pol = p.polity && POLITY[p.polity];
       const ph = PORTRAITS[p.id];
