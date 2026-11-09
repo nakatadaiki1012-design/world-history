@@ -119,6 +119,9 @@ function absorbLate() {
   fill(STORIES, (window.STORIES || []).filter(s => s && s.id && s.steps && s.steps.length));
   const T = window.STORY_TALK || {};
   STORIES.forEach(s => { const a = T[s.id]; if (a) s.steps.forEach((st, i) => { if (a[i] && !st.talk) st.talk = a[i]; }); });
+  // 書き直した語り（疑問の先回り・伏線などを入れたもの）は、前の語りより優先する
+  const T2 = window.STORY_TALK_NEW || {};
+  STORIES.forEach(s => { const a = T2[s.id]; if (a && a.length === s.steps.length) s.steps.forEach((st, i) => { if (a[i]) st.talk = a[i]; }); });
   STORIES.forEach(s => { STORY[s.id] = s; });
   Object.assign(PERSON_DETAIL, window.PERSON_DETAIL || {});
   Object.assign(EVENT_FUN, window.EVENT_FUN || {});
