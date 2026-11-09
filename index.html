@@ -304,7 +304,14 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
   .mapview { grid-template-columns: 1fr; grid-template-rows: minmax(330px, 62vh) auto; height: auto; }
   .side { max-height: none; }
   .side-body { max-height: none; overflow: visible; }   /* スマホ：ページの中にもう1つスクロールを作らない */
+  .mapview { grid-template-rows: var(--maph, minmax(330px, 62vh)) auto; }
+  .mapview:has(.hm.storying) { grid-template-rows: var(--maph, minmax(420px, 80vh)) auto; }
 }
+/* 説明の欄の上のつまみ（地図の下に説明があるときだけ出る） */
+.side-grip { display: none; height: 22px; align-items: center; justify-content: center; cursor: ns-resize; touch-action: none; border-bottom: 1px solid var(--line); }
+.side-grip i { width: 48px; height: 5px; border-radius: 3px; background: var(--line); }
+.side-grip:hover i, .side-grip.drag i { background: var(--accent); }
+@media (max-width: 900px) { .side-grip { display: flex; } }
 
 /* --- 年表 --- */
 .chrono { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; height: calc(100vh - var(--top-h) - 36px); height: calc(100dvh - var(--top-h) - 36px); min-height: 480px; }
@@ -510,7 +517,7 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .cap-bar i { display: block; height: 100%; width: 0; background: #ffd76a; }
 .cap-bar i.busy { width: 30%; animation: capbusy 1.4s ease-in-out infinite alternate; }
 @keyframes capbusy { from { margin-left: 0; } to { margin-left: 70%; } }
-@media (max-width: 900px) { .mapview:has(.hm.storying) { grid-template-rows: minmax(420px, 80vh) auto; } }
+
 @media (max-width: 720px) { .cap-text { max-height: 5.7em; } .lbl2 { display: none; } .hm-caption { left: 6px; right: 6px; bottom: 6px; } }
 .ttsrow { display: flex; align-items: center; gap: 6px; font-size: 13.5px; margin-top: 6px; cursor: pointer; }
 .speak.on { background: #ffd76a; border-color: #d9b440; color: #2a2010; }
@@ -637,6 +644,10 @@ a.btn.primary { color: var(--accent-ink, #fff); }
 @media (max-width: 380px) { .cap-ctl { flex-wrap: wrap; row-gap: 4px; } .cap-ctl [data-a=size] { display: none; } }
 /* テロップの文は、おすと広がる（もう一度おすと戻る） */
 .cap-text.open { max-height: 45vh; max-height: 45dvh; }
+/* テロップの上のつまみ：上下にドラッグして高さを変える */
+.cap-grip { height: 16px; margin: -9px -13px 0; display: flex; align-items: center; justify-content: center; cursor: ns-resize; touch-action: none; }
+.cap-grip i { width: 44px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.4); }
+.cap-grip:hover i, .cap-grip.drag i { background: #ffd76a; }
 /* スマホ：表示の設定は画面の下から出す（中だけ小さくスクロールしない） */
 @media (max-width: 720px) {
   .hm-set { position: fixed; left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 72vh; max-height: 72dvh; z-index: 80; box-shadow: 0 -4px 28px rgba(0,0,0,.3); }

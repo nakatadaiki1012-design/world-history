@@ -2,7 +2,7 @@
 registerTool('map', {
   name: '歴史地図',
   render(main, params) {
-    const wrap = el(`<div class="mapview"><div class="mapbox" style="display:flex;min-height:0"></div><aside class="side"><div class="tabs" role="tablist"></div><div class="side-body"></div></aside></div>`);
+    const wrap = el(`<div class="mapview"><div class="mapbox" style="display:flex;min-height:0"></div><aside class="side"><div class="side-grip" role="separator" aria-label="説明の欄の高さ（上下にドラッグ）" title="上下にドラッグして、説明の欄を広げる・せばめる（ダブルクリックでもとにもどす）"><i></i></div><div class="tabs" role="tablist"></div><div class="side-body"></div></aside></div>`);
     main.appendChild(wrap);
     const box = $('.mapbox', wrap), tabs = $('.tabs', wrap), body = $('.side-body', wrap);
     let tab = store.get('mapTab', 'year');
@@ -17,6 +17,21 @@ registerTool('map', {
       onSelect: () => { syncHash(); renderSide(); }
     });
     map.root.style.flex = '1';
+    // スマホ・タブレット（説明の欄が地図の下にあるとき）：つまみを上へドラッグすると、地図をせばめて説明の欄を広げる
+    {
+      const grip = $('.side-grip', wrap);
+      const apply = h => { if (h) wrap.style.setProperty('--maph', h + 'px'); else wrap.style.removeProperty('--maph'); };
+      apply(store.get('mapH', 0));
+      grip.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        const y0 = e.clientY, h0 = box.getBoundingClientRect().height;
+        grip.setPointerCapture(e.pointerId); grip.classList.add('drag');
+        const mv = ev => apply(Math.round(Math.min(window.innerHeight * 0.85, Math.max(160, h0 + (ev.clientY - y0)))));
+        const up = () => { grip.classList.remove('drag'); grip.removeEventListener('pointermove', mv); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up); store.set('mapH', parseInt(wrap.style.getPropertyValue('--maph'), 10) || 0); window.dispatchEvent(new Event('resize')); };
+        grip.addEventListener('pointermove', mv); grip.addEventListener('pointerup', up); grip.addEventListener('pointercancel', up);
+      });
+      grip.addEventListener('dblclick', () => { store.set('mapH', 0); apply(0); window.dispatchEvent(new Event('resize')); });
+    }
 
     // アドレス（# のあと）を今の場面に。コピーして送れば同じ場面が開ける
     function syncHash() {
@@ -426,7 +441,7 @@ registerTool('map', {
           $('.hm-stage', map.root).appendChild(b);
         }
       }
-      cap.innerHTML = `${capFig}
+      cap.innerHTML = `<div class="cap-grip" role="separator" aria-orientation="horizontal" aria-label="テロップの高さ（上下にドラッグ）" title="上下にドラッグして高さを変える（ダブルクリックでもとにもどす）"><i></i></div>${capFig}
         <div class="cap-top"><span class="cap-story">${esc(story.title)}</span><span class="cap-n num">${si + 1} / ${n}</span></div>
         <div class="cap-when"><span class="num">${esc(stepWhen(s))}</span>${s.date ? ' ' + esc(s.date) : ''}<span>📍 ${esc(s.place || '')}</span></div>
         <div class="cap-title">${furi(s.title)}</div>
@@ -447,6 +462,23 @@ registerTool('map', {
       cap.onpointerdown = e => e.stopPropagation();
       // 文が3行に入りきらないときは下をうすく。テロップにさわったら、自動で進むのを少し待つ
       const ctx = $('.cap-text', cap);
+      // 上のつまみをドラッグすると、説明の部分を上へ広げられる（高さは覚えておく）
+      const capH = store.get('capH', 0);
+      if (ctx && capH) ctx.style.maxHeight = capH + 'px';
+      const grip = $('.cap-grip', cap);
+      if (grip && ctx) {
+        const maxH = () => Math.max(80, map.root.getBoundingClientRect().height - (cap.offsetHeight - ctx.clientHeight) - 30);
+        grip.addEventListener('pointerdown', e => {
+          e.preventDefault(); e.stopPropagation();
+          if (small) { store.set('capSmall', false); renderCaption(); return; }
+          const y0 = e.clientY, h0 = ctx.clientHeight;
+          grip.setPointerCapture(e.pointerId); grip.classList.add('drag'); ctx.classList.remove('open');
+          const mv = ev => { const h = Math.round(Math.min(maxH(), Math.max(50, h0 + (y0 - ev.clientY)))); ctx.style.maxHeight = h + 'px'; ctx.classList.toggle('more', ctx.scrollHeight > ctx.clientHeight + 4); };
+          const up = () => { grip.classList.remove('drag'); grip.removeEventListener('pointermove', mv); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up); store.set('capH', parseInt(ctx.style.maxHeight, 10) || 0); };
+          grip.addEventListener('pointermove', mv); grip.addEventListener('pointerup', up); grip.addEventListener('pointercancel', up);
+        });
+        grip.addEventListener('dblclick', e => { e.stopPropagation(); store.set('capH', 0); ctx.style.maxHeight = ''; });
+      }
       if (ctx) {
         requestAnimationFrame(() => ctx.classList.toggle('more', ctx.scrollHeight > ctx.clientHeight + 4));
         ctx.addEventListener('scroll', () => ctx.classList.toggle('more', ctx.scrollTop + ctx.clientHeight < ctx.scrollHeight - 4), { passive: true });
