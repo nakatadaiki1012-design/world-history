@@ -256,7 +256,6 @@ registerTool('map', {
         <div class="num" style="font-weight:700">${esc(span(p.start, p.end))}</div>
         ${capitalText(p)}
         <p>${linkTerms(p.text || '', p.name)}</p>
-        ${personFunHtml(p.id)}
         ${p.keys && p.keys.length ? `<div class="keys">${p.keys.map(k => TERM[k] ? `<a class="term" data-term="${esc(k)}" href="#term/${encodeURIComponent(k)}"><span>${esc(k)}</span></a>` : `<span>${esc(k)}</span>`).join('')}</div>` : ''}
         ${p.tags ? `<div class="muted" style="font-size:12.5px">${p.tags.map(t => COURSE[t]).filter(Boolean).join('・')}</div>` : ''}
         ${figureHtml('polity:' + p.id, 2)}
@@ -302,6 +301,7 @@ registerTool('map', {
         <div class="muted" style="font-size:13px">${esc(p.kana || '')}</div>
         <div class="num" style="font-weight:700">${esc(lifeSpan(p))}</div>
         <p>${linkTerms(p.text || '', p.name)}</p>
+        ${personFunHtml(p.id)}
         ${p.keys && p.keys.length ? `<div class="keys">${p.keys.map(k => TERM[k] ? `<a class="term" data-term="${esc(k)}" href="#term/${encodeURIComponent(k)}"><span>${esc(k)}</span></a>` : `<span>${esc(k)}</span>`).join('')}</div>` : ''}
         ${ph ? `<div class="credit">肖像：${esc(ph.what || '')}${ph.artist ? '（' + esc(cleanArtist(ph.artist)) + '）' : ''}・${esc(ph.license || '')}・<a href="${esc(ph.page || '#')}" target="_blank" rel="noopener">ウィキメディア・コモンズ</a></div>` : ''}
       </div>`));
