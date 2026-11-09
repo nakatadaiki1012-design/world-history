@@ -68,7 +68,7 @@ registerTool('stories', {
       const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); addPage(); } }, { rootMargin: '600px' });
       more.addEventListener('click', addPage);
       function card(s) {
-        const head = st.q && qHit(s) ? '題名に「' + st.q + '」' : st.sort === 'region' ? (REGION[s.region] || {}).name : eraOf(s.steps[0].year);
+        const head = st.q && qHit(s) ? '題名に「' + st.q + '」' : st.sort === 'region' ? (REGION[s.region] || {}).name : s.steps[0].year < YEAR_MIN ? '先史' : eraOf(s.steps[0].year);
         if (head !== lastHead) { grid.appendChild(el(`<h3 class="lf-head">${esc(head || '')}</h3>`)); lastHead = head; }
         const col = (REGION[s.region] || {}).color || '#555';
         const talk = s.steps.some(x => x.talk);

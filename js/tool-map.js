@@ -382,7 +382,8 @@ registerTool('map', {
       map.setView(map.view);
     }
     // 場面の読み上げ用の文
-    const stepSpeech = s => `${yearLabel(s.year)}${s.date ? '、' + s.date : ''}。${s.title}。${s.text || ''}${s.why ? '。' + s.why : ''}`;
+    const stepWhen = s => s.when || yearLabel(s.year);
+    const stepSpeech = s => `${stepWhen(s)}${s.date ? '、' + s.date : ''}。${s.title}。${s.text || ''}${s.why ? '。' + s.why : ''}`;
     // 「語り」：場面に talk（エピソードをまじえた語り）があれば、テロップと読み上げはそちらを使う
     let talkMode = store.get('talkMode', true);
     const stepBody = s => (talkMode && s.talk) ? s.talk : (s.text || '');
@@ -390,7 +391,7 @@ registerTool('map', {
     const clearReading = () => $$('.hm-caption .reading').forEach(x => x.classList.toggle('reading', false));
     function speakStep(s, onend) {
       const sents = SPEECH.sentences(stepBody(s));
-      const parts = [`${yearLabel(s.year)}${s.date ? '、' + s.date : ''}。${s.title}。`, ...sents];
+      const parts = [`${stepWhen(s)}${s.date ? '、' + s.date : ''}。${s.title}。`, ...sents];
       const marks = ['.cap-title', ...sents.map((x, i) => `.cap-s[data-i="${i}"]`)];
       if (s.why) { parts.push('つながり。' + s.why.replace(/^[^：]*：/, '')); marks.push('.cap-why'); }
       SPEECH.speakParts(parts, () => { clearReading(); if (onend) onend(); }, i => {
@@ -426,7 +427,7 @@ registerTool('map', {
       }
       cap.innerHTML = `${capFig}
         <div class="cap-top"><span class="cap-story">${esc(story.title)}</span><span class="cap-n num">${si + 1} / ${n}</span></div>
-        <div class="cap-when"><span class="num">${esc(yearLabel(s.year))}</span>${s.date ? ' ' + esc(s.date) : ''}<span>📍 ${esc(s.place || '')}</span></div>
+        <div class="cap-when"><span class="num">${esc(stepWhen(s))}</span>${s.date ? ' ' + esc(s.date) : ''}<span>📍 ${esc(s.place || '')}</span></div>
         <div class="cap-title">${furi(s.title)}</div>
         <div class="cap-text${talkMode && s.talk ? ' talk' : ''}">${SPEECH.sentences(stepBody(s)).map((x, i) => `<span class="cap-s" data-i="${i}">${furi(x)}</span>`).join('')}${s.why ? `<div class="cap-why">🔗 ${esc(s.why)}</div>` : ''}</div>
         <div class="cap-ctl">
@@ -488,7 +489,7 @@ registerTool('map', {
       const inBox = (v, lon, lat) => { const b = GEO.VIEWS[v].bbox; return lon >= b[0] && lon <= b[2] && lat >= b[1] && lat <= b[3]; };
       let v = first ? (story.view || REGION_VIEW[story.region]) : null;
       const cur = v || map.view;
-      if (!inBox(cur, s.lon, s.lat)) {
+      if (!inBox(cur, s.lon, s.lat) || (s.span || 6) > 90) {   // 大陸をまたぐ広い場面は世界地図で
         const cands = Object.entries(GEO.VIEWS).filter(([k, x]) => !x.parent && k !== 'world' && inBox(k, s.lon, s.lat)).sort((a, b) => a[1].span - b[1].span);
         v = (s.span || 6) > 25 || !cands.length ? 'world' : cands[0][0];
       }
@@ -531,7 +532,7 @@ registerTool('map', {
         <h2 style="margin-top:0">${esc(story.title)}</h2>
         <div class="st-dots"></div>
         <div class="st-card">
-          <div class="st-when"><span class="num">${esc(yearLabel(s.year))}</span>${s.date ? ' ' + esc(s.date) : ''}<span class="st-place">📍 ${esc(s.place || '')}</span></div>
+          <div class="st-when"><span class="num">${esc(stepWhen(s))}</span>${s.date ? ' ' + esc(s.date) : ''}<span class="st-place">📍 ${esc(s.place || '')}</span></div>
           <h3 class="st-title">${si + 1}．${esc(s.title)}</h3>
           ${figureHtml(s.imageKey || `story:${story.id}:${si + 1}`)}
           <p>${linkTerms(s.text || '')}</p>

@@ -6,7 +6,7 @@ const GROUPS = [
 ];
 
 // 地図に要らないデータ（物語・授業・画像・読み・用語・地形・経済）は、地図を出したあとで読みこむ
-const LATE_FILES = ["causes", "lessons-sogo", "lessons-tankyu", "stories", "stories-more", "stories-more2", "stories-people", "stories-people2", "stories-people3", "stories-people4", "stories-people5", "stories-themes","stories-terms-1","stories-terms-2","stories-terms-3","stories-terms-4","stories-terms-5","stories-terms-6", "story-talk", "people-detail", "event-fun", "images", "images-more", "images-more2","images-more3","images-more4","images-more5", "yomi-auto", "yomi-1", "yomi-2", "yomi-3", "yomi-4", "yomi-5", "yomi-6", "yomi-7", "yomi-8", "yomi-9", "glossary-1", "glossary-2", "glossary-3", "glossary-4", "terrain", "econ"];
+const LATE_FILES = ["causes", "lessons-sogo", "lessons-tankyu", "stories", "stories-prehistory", "stories-more", "stories-more2", "stories-people", "stories-people2", "stories-people3", "stories-people4", "stories-people5", "stories-themes","stories-terms-1","stories-terms-2","stories-terms-3","stories-terms-4","stories-terms-5","stories-terms-6", "story-talk", "people-detail", "event-fun", "images", "images-more", "images-more2","images-more3","images-more4","images-more5", "yomi-auto", "yomi-1", "yomi-2", "yomi-3", "yomi-4", "yomi-5", "yomi-6", "yomi-7", "yomi-8", "yomi-9", "glossary-1", "glossary-2", "glossary-3", "glossary-4", "terrain", "econ"];
 // 2つに分けて読む：ふつうのデータ（用語・画像・読みなど）は地図のすぐあと、物語（いちばん大きい）は必要になったときに
 const STORY_FILES = LATE_FILES.filter(f => /^stor/.test(f)), BASE_FILES = LATE_FILES.filter(f => !/^stor/.test(f));
 let lateReady = false, baseReady = false, storiesReady = false, storiesP = null;

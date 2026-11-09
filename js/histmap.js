@@ -573,9 +573,9 @@ function createHistMap(host, opts = {}) {
     // 引きの地図の国の色は、年が止まってから作りなおす（ツマミを動かしているあいだは四角だけ）
     drawInset(true); clearTimeout(insetTimer); insetTimer = setTimeout(() => drawInset(), 350);
     // 年の表示
-    $('.hm-yearbig', root).innerHTML = `${esc(yearLabel(y))}<small>${esc(eraName(y))}</small>`;
+    $('.hm-yearbig', root).innerHTML = st.preWhen ? `${esc(st.preWhen)}<small>先史時代（文字ができる前）</small>` : `${esc(yearLabel(y))}<small>${esc(eraName(y))}</small>`;
     if (opts.bar !== false) {
-      $('.yr', root).textContent = yearLabel(y);
+      $('.yr', root).textContent = st.preWhen || yearLabel(y);
       const r = $('.hm-slider input', root);
       if (document.activeElement !== r) r.value = Math.round(yearToPos(y) * 10);
       $$('.hm-eras button', root).forEach(b => b.classList.toggle('on', +b.dataset.y === y));
@@ -1049,7 +1049,17 @@ function createHistMap(host, opts = {}) {
     }
     return labels;
   }
+  // 文字ができる前（地図の年の下限より前）の場面：国境・都・地名は出さず、年は「約700万年前」のように出す
+  function setPrehist(when) {
+    root.classList.toggle('prehist', !!when);
+    st.preWhen = when || '';
+    const y = st.year, lab = when || yearLabel(y);
+    $('.hm-yearbig', root).innerHTML = `${esc(lab)}<small>${esc(when ? '先史時代（文字ができる前）' : eraName(y))}</small>`;
+    if (opts.bar !== false) $('.yr', root).textContent = lab;
+  }
   function setStory(step) {
+    const pre = step && step.year < YEAR_MIN ? (step.when || GEO.yearLabel(step.year)) : '';
+    if (pre || root.classList.contains('prehist')) setPrehist(pre);
     if (!step) { st.story = null; requestDraw(); return; }
     st.story = {
       center: { lon: step.lon, lat: step.lat, name: step.place },
