@@ -135,7 +135,9 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .hm { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
 .hm-stage { position: relative; flex: 1; min-height: 0; background: var(--sea); overflow: hidden; touch-action: none; }
 .hm-pan { position: absolute; inset: 0; transform-origin: 0 0; will-change: transform; clip-path: inset(-50%); contain: layout style size; }   /* 画面の外は上下左右に半分まで（絵を大きくしすぎない） */
-.hm-pan > svg { overflow: visible; }   /* 地図はいつも1枚の絵として用意（動かし始めに作りなおさない） */
+.hm-pan > svg { overflow: visible; }
+.hm-pan > svg.hm-ovsvg { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; }   /* 名前・点の層（地図とは別の絵） */
+.hm-ovsvg > .hm-over { pointer-events: visiblePainted; }   /* 地図はいつも1枚の絵として用意（動かし始めに作りなおさない） */
 .hm-stage svg, .hm-inset svg { font-family: var(--font-map-sans); }
 .hm-stage svg .hm-plc text, .hm-stage svg .hm-lab, .hm-stage svg .st-lab { font-family: var(--font-map); }
 .hm-stage svg { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }

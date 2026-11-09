@@ -86,13 +86,17 @@ function createHistMap(host, opts = {}) {
   const gRel = gZoom.append('g').attr('class', 'hm-relief');   // 陰影起伏（国の色の上に乗算でかさねる）
   const gMask = gZoom.append('g');   // 海のふた
   const gWater = gZoom.append('g');  // 川と湖
-  const gOver = svg.append('g');   // 名前・点（拡大しても大きさが変わらない）
+  // 名前・点は、地図とは別の svg に描く（名前を置きなおしても、重い地図の絵は描きなおさずにすむ）
+  const ovEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); ovEl.setAttribute('class', 'hm-ovsvg'); ovEl.setAttribute('aria-hidden', 'true');
+  panEl.appendChild(ovEl);
+  const ovsvg = d3.select(ovEl);
+  const gOver = ovsvg.append('g').attr('class', 'hm-over');   // 名前・点（拡大しても大きさが変わらない）
   const gTlab = gOver.append('g');   // 地形・町の名前（いちばん下）
   const gStory = gOver.append('g');
   const gPlc = gOver.append('g');
   const gTrail = gOver.append('g'), gLab = gOver.append('g'), gCap = gOver.append('g'), gEv = gOver.append('g'), gPeo = gOver.append('g');
   const uid = 'hm' + Math.random().toString(36).slice(2, 8);
-  svg.append('defs').append('clipPath').attr('id', uid + 'pc').append('circle').attr('r', 11);
+  ovsvg.append('defs').append('clipPath').attr('id', uid + 'pc').append('circle').attr('r', 11);
   let pr, path, landPath;
 
   // --- 見る範囲のボタン（大きな地域。えらぶと、その中のくわしい範囲も出る） ---
@@ -155,18 +159,26 @@ function createHistMap(host, opts = {}) {
   let gest = null, startT = null;
   const zsel = d3.select(stage);
   const zoom = d3.zoom().scaleExtent([1, 400])
-    .filter(ev => (!ev.ctrlKey || ev.type === 'wheel') && !ev.button && svgEl.contains(ev.target))
+    .filter(ev => (!ev.ctrlKey || ev.type === 'wheel') && !ev.button && (svgEl.contains(ev.target) || ovEl.contains(ev.target)))
     .on('start.moved', () => { startT = st.t; })
     .on('start.fast', ev => {
       if (opts.mini) return;
       relTok++; clearTimeout(relTimer);   // 動き始めたら、山の影の描きなおしはやめる（動き終わってから）
       if (!ev.sourceEvent) { flying = true; gOver.style('display', 'none'); return; }   // 自動の動き：名前や印はいったんかくし、着いてから置く
       if (gest) return;
+      if (fly) finishFly();   // 自動の動きのとちゅうで指を置いたら、今の位置でくっきり描いてから
       gest = { t0: st.t };
     })
     .on('zoom', ev => {
     st.t = ev.transform; st.k = ev.transform.k;
     if (ev.sourceEvent) st.cam = null;   // 自分で動かしたら、物語のカメラの目標は忘れる
+    // 自動の動き（物語のカメラ・ボタン）も、指のときと同じく「1枚の絵」をずらすだけ（毎コマの描きなおしをしない）
+    if (fly && !ev.sourceEvent) {
+      const b = fly.tb, t1 = ev.transform, r = t1.k / b.k;
+      panEl.style.transform = `translate(${t1.x - b.x * r}px, ${t1.y - b.y * r}px) scale(${r})`;
+      if (!zoomRaf) zoomRaf = requestAnimationFrame(() => { zoomRaf = 0; if (fly && !inset.hidden) drawInset(true); });
+      return;
+    }
     if (gest) {
       if (ev.sourceEvent) {
         const t0 = gest.t0, t1 = ev.transform, r = t1.k / t0.k;
@@ -195,21 +207,83 @@ function createHistMap(host, opts = {}) {
     panEl.style.transform = '';
     gPol.style('opacity', st.k > 25 ? 0.22 : st.k > 12 ? 0.6 : null); gEdge.style('opacity', st.k > 25 ? 0.3 : null);
     gZoom.attr('transform', st.t);
+    if (pendingCommit) { const c = pendingCommit; pendingCommit = null; c(); }
     // 前に置いた名前を、今の位置までずらしておく（置きなおすまでの、ほんの少しのあいだ）
     const r = st.t.k / overlayT.k;
     gOver.attr('transform', `translate(${st.t.x - overlayT.x * r},${st.t.y - overlayT.y * r}) scale(${r})`);
     updateTerrain(); placeLater();
   }
+  // --- 自動の動き（なめらかに） ---
+  // 動く範囲がぜんぶ入る大きさで1回だけ描いておき、あとは絵をずらす・拡大するだけにする。着いたら、くっきり描きなおす
+  let fly = null;
+  const viewOf = t => [(st.w / 2 - t.x) / t.k, (st.h / 2 - t.y) / t.k, Math.max(st.w, st.h) / t.k];
+  function finishFly() {
+    if (!fly) return;
+    fly = null;
+    panEl.style.transform = '';
+    gPol.style('opacity', st.k > 25 ? 0.22 : st.k > 12 ? 0.6 : null); gEdge.style('opacity', st.k > 25 ? 0.3 : null);
+    gZoom.attr('transform', st.t); gRel.style('display', null);
+    if (pendingCommit) { const c = pendingCommit; pendingCommit = null; c(); }
+    updateTerrain();
+  }
+  // stages：[[行き先の transform, 時間(ms)], ...]
+  function animate(stages) {
+    zsel.interrupt();
+    if (fly) finishFly();
+    if (opts.mini || !st.w) {   // 小さい地図は、これまでどおり
+      let tr = zsel; stages.forEach(([t, d]) => { tr = tr.transition().duration(d).ease(d3.easeCubicInOut).call(zoom.transform, t); });
+      return;
+    }
+    // 動くあいだに見える範囲（地図の上の座標）をぜんぶ合わせた箱
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, prev = st.t;
+    const addView = v => { const k = Math.max(st.w, st.h) / v[2], hw = st.w / 2 / k, hh = st.h / 2 / k; x0 = Math.min(x0, v[0] - hw); x1 = Math.max(x1, v[0] + hw); y0 = Math.min(y0, v[1] - hh); y1 = Math.max(y1, v[1] + hh); };
+    stages.forEach(([t]) => { const it = d3.interpolateZoom(viewOf(prev), viewOf(t)); for (let i = 0; i <= 12; i++) addView(it(i / 12)); prev = t; });
+    // 今描いてある範囲（画面の外も上下左右に半分まで描いてある）に入っていれば、描きなおさずにそのまま動かす
+    const c = st.t, mx = st.w / 2 / c.k, my = st.h / 2 / c.k;
+    const cx0 = -c.x / c.k - mx, cy0 = -c.y / c.k - my, cx1 = (st.w - c.x) / c.k + mx, cy1 = (st.h - c.y) / c.k + my;
+    let tb = c;
+    if (x0 < cx0 || y0 < cy0 || x1 > cx1 || y1 > cy1) {
+      const k = Math.min(st.w / Math.max(1e-6, x1 - x0), st.h / Math.max(1e-6, y1 - y0));
+      tb = d3.zoomIdentity.translate(st.w / 2 - k * (x0 + x1) / 2, st.h / 2 - k * (y0 + y1) / 2).scale(k);
+    }
+    fly = { tb, stages: stages.map(s => s[0]), n: 0 };
+    flying = true; gOver.style('display', 'none'); hideTip();
+    if (tb !== c) {
+      // 見た目は今のまま（絵をずらして合わせる）で、広い範囲を描いておく
+      const r = c.k / tb.k;
+      panEl.style.transform = `translate(${c.x - tb.x * r}px, ${c.y - tb.y * r}px) scale(${r})`;
+      gRel.style('display', 'none');   // 山の影は今の範囲の分しかないので、引いて動くあいだはかくす
+      gZoom.attr('transform', tb);
+    }
+    updateDetail(stages[stages.length - 1][0].k);   // 着いた先の細かさの形を、動いているあいだに計算しておく
+    const my_ = fly;
+    // 描きおわってから動き始める（動いているとちゅうで止まらないように）
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (fly !== my_) return;
+      let tr = zsel;
+      stages.forEach(([t, d]) => { tr = tr.transition().duration(d).ease(d3.easeCubicInOut).call(zoom.transform, t); });
+    }));
+  }
   zoom.on('end.relief', ev => {
+    if (fly && !ev.sourceEvent) {
+      // 段のさかい目（引いてから寄る、のまん中）なら、まだ描きなおさない
+      const want = fly.stages[fly.n++];
+      if (fly.n < fly.stages.length && want && Math.abs(want.k - st.t.k) < 1e-6 * want.k + 1e-9 && Math.abs(want.x - st.t.x) < 0.5 && Math.abs(want.y - st.t.y) < 0.5) return;
+      finishFly();
+    }
     if (flying) { flying = false; gOver.style('display', null); placeLater(0); }
-    endGest(); updateDetail(); drawInset(); scheduleRelief(); if (ev.sourceEvent && startT && (Math.abs(startT.x - st.t.x) + Math.abs(startT.y - st.t.y) > 4 || Math.abs(startT.k - st.t.k) > 0.01)) { markNear(); showViews(4000); } });
+    endGest(); updateDetail(); if (st.k < 3.5) inset.hidden = true; else if (!inset.hidden) drawInset(true); drawInsetLater(); scheduleRelief(); if (ev.sourceEvent && startT && (Math.abs(startT.x - st.t.x) + Math.abs(startT.y - st.t.y) > 4 || Math.abs(startT.k - st.t.k) > 0.01)) { markNear(); showViews(4000); } });
   zsel.call(zoom).on('dblclick.zoom', null);
   // 最初に少しだけ見せて、ここにあることを知らせる
   setTimeout(() => showViews(3500), 300);
   $$('.hm-tools button[data-z]', root).forEach(b => b.addEventListener('click', () => {
     const z = b.dataset.z;
-    if (z === 'reset') zsel.transition().duration(350).call(zoom.transform, d3.zoomIdentity);
-    else zsel.transition().duration(250).call(zoom.scaleBy, z === 'in' ? 1.6 : 1 / 1.6);
+    if (z === 'reset') animate([[d3.zoomIdentity, 350]]);
+    else {
+      const f = z === 'in' ? 1.6 : 1 / 1.6, t = st.t, k = clamp(t.k * f, 1, 400), cx = st.w / 2, cy = st.h / 2;
+      const t1 = zoom.constrain()(d3.zoomIdentity.translate(cx - (cx - t.x) * k / t.k, cy - (cy - t.y) * k / t.k).scale(k), [[0, 0], [st.w, st.h]], zoom.translateExtent());
+      animate([[t1, 250]]);
+    }
   }));
 
   function resize() {
@@ -222,7 +296,7 @@ function createHistMap(host, opts = {}) {
     st.ls = clamp(Math.min(w / 1000, h / 620), 0.96, 1.7) * (document.documentElement.classList.contains('big') ? 1.35 : 1);   // 教室用の大きな文字なら、さらに大きく
     root.style.setProperty('--ls', st.ls.toFixed(3));
     mcache.clear();
-    svg.attr('viewBox', `0 0 ${w} ${h}`);
+    svg.attr('viewBox', `0 0 ${w} ${h}`); ovsvg.attr('viewBox', `0 0 ${w} ${h}`);
     zoom.extent([[0, 0], [w, h]]).translateExtent([[-w * 0.6, -h * 0.6], [w * 1.6, h * 1.6]]);
     buildBase();
     if (st.cam) { zsel.interrupt(); flyTo(st.cam.lon, st.cam.lat, st.cam.span, null, 0); }
@@ -248,14 +322,27 @@ function createHistMap(host, opts = {}) {
   // 拡大のしかたが大きく変わったら、形を細かさに合わせて作りなおす
   // 一度計算した細かさの形はとっておく（拡大・縮小を行ったり来たりしても、すぐ出る）
   let pathCaches = new Map(), detailJob = 0;
-  function updateDetail() {
-    const k = Math.pow(2, Math.max(0, Math.floor(Math.log2(st.k || 1))));
+  // 大きな形（MultiPolygon・MultiLineString）を、点の数がだいたい同じになるように分ける
+  const landByK = new Map(), meshByK = new Map();
+  function splitGeo(geo, max = 2000) {
+    const g = geo.type === 'Feature' ? geo.geometry : geo;
+    if (!g || (g.type !== 'MultiPolygon' && g.type !== 'MultiLineString')) return [geo];
+    const size = c => g.type === 'MultiPolygon' ? c.reduce((s, r) => s + r.length, 0) : c.length;
+    const out = []; let cur = [], n = 0;
+    g.coordinates.forEach(c => { cur.push(c); n += size(c); if (n >= max) { out.push({ type: g.type, coordinates: cur }); cur = []; n = 0; } });
+    if (cur.length) out.push({ type: g.type, coordinates: cur });
+    return out;
+  }
+  let pendingCommit = null;   // 計算ずみで、動きが止まるのを待っている形の書きかえ
+  function updateDetail(kWant) {
+    const k = Math.pow(2, Math.max(0, Math.floor(Math.log2(kWant || st.k || 1))));
     if (k === detailK) return;
     detailK = k;
     path = makePath(detailK);
     if (!pathCaches.has(k)) { if (pathCaches.size > 5) pathCaches.delete(pathCaches.keys().next().value); pathCaches.set(k, [new WeakMap(), new WeakMap()]); }
     [pathCache, boundsCache] = pathCaches.get(k);
     // 形の作りなおしは、1コマに 8 ミリ秒ずつ。指で動かすのをじゃましない
+    pendingCommit = null;
     const job = ++detailJob, P = path, tasks = [];
     // 計算は少しずつ、書きかえは最後に1回で（書きかえのたびに地図全体を描きなおさないように）
     const out = [];
@@ -264,9 +351,15 @@ function createHistMap(host, opts = {}) {
     each(gEdge.selectAll('path'), pathOf);
     each(gSph.selectAll('path'), pathOf);
     let newLand = null, newGrat = null, newMesh = null;
-    tasks.push(() => { newLand = P(GEO.world().land); });
+    // 陸地と今の国境は大きいので、いくつかに分けて計算する（1回で長く止まらないように）。細かさごとにとっておく
+    const lk = st.view + '|' + k, pieces = (geo, into) => splitGeo(geo).forEach((g, j) => tasks.push(() => { into[j] = P(g) || ''; }));
+    if (landByK.has(lk)) newLand = landByK.get(lk);
+    else { const parts = []; pieces(GEO.world().land, parts); tasks.push(() => { newLand = parts.join(''); landByK.set(lk, newLand); }); }
     tasks.push(() => { newGrat = P(d3.geoGraticule10()); });
-    tasks.push(() => { if (drawStatic.mesh) newMesh = P(drawStatic.mesh); });
+    if (drawStatic.mesh) {
+      if (meshByK.has(lk) && meshByK.get(lk)[0] === drawStatic.mesh) newMesh = meshByK.get(lk)[1];
+      else { const parts = [], m = drawStatic.mesh; pieces(m, parts); tasks.push(() => { newMesh = parts.join(''); meshByK.set(lk, [m, newMesh]); }); }
+    }
     each(gTerr.selectAll('path'), d => P(d));
     each(gWater.selectAll('path'), d => P(d));
     let i = 0;
@@ -275,7 +368,7 @@ function createHistMap(host, opts = {}) {
       const t0 = performance.now();
       while (i < tasks.length && performance.now() - t0 < 8) tasks[i++]();
       if (i < tasks.length) { requestAnimationFrame(run); return; }
-      if (gest) { requestAnimationFrame(run); return; }   // 動かしているあいだは待つ
+      const commit = () => {
       out.forEach(([n, d]) => n.setAttribute('d', d));
       landPath = newLand;
       gBase.select('.hm-land').attr('d', landPath);
@@ -283,6 +376,10 @@ function createHistMap(host, opts = {}) {
       const W3 = st.w * 4, H3 = st.h * 4;
       gMask.select('.hm-seamask').attr('d', `M${-W3},${-H3}H${W3 + st.w}V${H3 + st.h}H${-W3}Z` + landPath);
       if (newMesh) gModern.select('path').attr('d', newMesh);
+      };
+      // 動かしているあいだは待ち、止まったときの描きなおしといっしょに書きかえる（描きなおしを1回ですませる）
+      if (gest || fly) { pendingCommit = commit; return; }
+      pendingCommit = null; commit();
     })();
   }
   // 地形などのデータがあとから届いたら、かき直す
@@ -300,10 +397,10 @@ function createHistMap(host, opts = {}) {
   }
   function buildBase() {
     pr = farCut(GEO.projection(st.view, st.w, st.h), st.view);
-    labelCache.clear();
+    labelCache.clear(); landByK.clear(); meshByK.clear();
     detailK = Math.pow(2, Math.max(0, Math.floor(Math.log2(st.k || 1))));
     path = makePath(detailK);
-    detailJob++; pathCaches = new Map([[detailK, [new WeakMap(), new WeakMap()]]]);
+    detailJob++; pendingCommit = null; pathCaches = new Map([[detailK, [new WeakMap(), new WeakMap()]]]);
     [pathCache, boundsCache] = pathCaches.get(detailK);
     drawStatic();
     renderViews();
@@ -402,7 +499,7 @@ function createHistMap(host, opts = {}) {
 
   // --- 引きの地図（強く拡大したときだけ、右上に小さく） ---
   const inset = $('.hm-inset', root), isvg = d3.select($('svg', inset));
-  inset.addEventListener('click', e => { e.stopPropagation(); zsel.transition().duration(500).call(zoom.transform, d3.zoomIdentity); });
+  inset.addEventListener('click', e => { e.stopPropagation(); animate([[d3.zoomIdentity, 500]]); });
   inset.addEventListener('pointerdown', e => e.stopPropagation());
   let insetKey = '', insetIp = null, insetTimer = null;
   // 引きの地図は小さいので、形をあらくしたもの（0.2度より近い点は省く）を使う。一度作ったらとっておく
@@ -422,8 +519,16 @@ function createHistMap(host, opts = {}) {
     liteCache.set(f, g); return g;
   }
   // light：動かしているあいだは、中の地図は作りなおさず、四角だけ動かす（作りなおすのは手をはなしてから）
+  // 引きの地図の作りなおしは、手があいたときに（止まった直後のコマを重くしない）
+  let insetIdle = 0;
+  function drawInsetLater() {
+    if (insetIdle) return;
+    const go = () => { insetIdle = 0; if (gest || fly) { drawInsetLater(); return; } drawInset(); };
+    insetIdle = window.requestIdleCallback ? requestIdleCallback(go, { timeout: 1200 }) : setTimeout(go, 300);
+  }
   function drawInset(light) {
     if (opts.mini || !pr) return;
+    if ((fly || gest) && (!light || inset.hidden || !insetIp)) return;   // 指で動かしているあいだも同じ   // 自動で動いているあいだは、引きの地図を作りなおさない（着いてから）
     const show = st.k >= 3.5, wasHidden = inset.hidden;
     inset.hidden = !show;
     if (!show) return;
@@ -499,11 +604,19 @@ function createHistMap(host, opts = {}) {
     list.sort((a, b) => a[0] - b[0]);
     let i = 0;
     const later = () => { if (window.requestIdleCallback) requestIdleCallback(step, { timeout: 2000 }); else setTimeout(step, 60); };
-    function step() {
+    // 1つの国の計算も4つに分けて、すき間の時間だけ使う（指で動かし始めたときに待たせない）
+    let f = null, part = 0;
+    function step(dl) {
       if (job !== warmJob) return;
-      if (gest || st.scrub) { setTimeout(later, 300); return; }   // 動かしているあいだは休む
-      const t0 = performance.now();
-      while (i < list.length && performance.now() - t0 < 6) { const [, p, y] = list[i++]; const f = GEO.shapeAt(p, y); if (f) { pathOf(f); boundsOf(f); labelPoint(f); } }
+      if (gest || fly || st.scrub) { setTimeout(later, 300); return; }   // 動かしているあいだは休む
+      const t0 = performance.now(), left = () => dl && dl.timeRemaining ? dl.timeRemaining() > 1 : performance.now() - t0 < 5;
+      while (i < list.length && left()) {
+        if (part === 0) { const [, p, y] = list[i]; f = GEO.shapeAt(p, y); part = f ? 1 : 4; }
+        else if (part === 1) { pathOf(f); part = 2; }
+        else if (part === 2) { boundsOf(f); part = 3; }
+        else if (part === 3) { labelPoint(f); part = 4; }
+        if (part === 4) { part = 0; f = null; i++; }
+      }
       if (i < list.length) later();
     }
     setTimeout(later, 1500);
@@ -997,9 +1110,12 @@ function createHistMap(host, opts = {}) {
   svg.on('click', () => { const sb = $('.hm-set', root); if (sb && !sb.hidden) { sb.hidden = true; $('.gear', root).setAttribute('aria-expanded', 'false'); return; } if (st.sel) select(null); });
 
   // --- 物語：地点・進路・川などを描く（画面の座標で。拡大しても線の太さは同じ） ---
+  let animRoutes = [];   // のびている途中の進路（線の長さだけを動かす）
   function drawStory(boxes) {
     gStory.selectAll('*').remove();
+    animRoutes = [];
     const S = st.story; if (!S) return [];
+    S.placed = true;
     const P = ll => { const q = pr(ll); return q ? st.t.apply(q) : null; };
     const line = d3.line().curve(d3.curveCatmullRom.alpha(0.5));
     (S.lines || []).forEach(l => {
@@ -1028,6 +1144,7 @@ function createHistMap(host, opts = {}) {
         const L = pth.node().getTotalLength();
         pth.attr('stroke-dasharray', `${L} ${L}`).attr('stroke-dashoffset', L * (1 - d3.easeCubicInOut(pr0)));
         if (pr0 === 0) pth.attr('marker-end', null);
+        animRoutes.push({ n: pth.node(), L, m: `url(#${mid})` });
       }
     });
     const labels = [];
@@ -1068,7 +1185,18 @@ function createHistMap(host, opts = {}) {
     };
     requestDraw();
     const S = st.story;
-    (function tick() { if (st.story !== S) return; if (!gest && !flying) placeOverlay(); if (performance.now() - S.t0 < 3000) requestAnimationFrame(tick); })();
+    // 進路がのびる動き：名前などは置きなおさず、線の長さだけを毎コマ変える（軽い）
+    (function tick() {
+      if (st.story !== S) return;
+      if (!gest && !flying) {
+        if (!S.placed) placeOverlay();
+        else {
+          const p0 = clamp((performance.now() - S.t0 - 700) / 2200, 0, 1), e = d3.easeCubicInOut(p0);
+          animRoutes.forEach(a => { a.n.setAttribute('stroke-dashoffset', a.L * (1 - e)); if (p0 > 0) a.n.setAttribute('marker-end', a.m); if (p0 >= 1) a.n.removeAttribute('stroke-dasharray'); });
+        }
+      }
+      if (performance.now() - S.t0 < 3000) requestAnimationFrame(tick);
+    })();
   }
   // その地点を中心に、横 span 度ぶんが入るように拡大して移動
   // --- まわりの「見どころ」の多さで、寄り方を決める ---
@@ -1140,10 +1268,9 @@ function createHistMap(host, opts = {}) {
       const k1 = Math.max(1, Math.min(st.t.k, k) / 3);
       const mid = [ (st.t.invertX(st.w / 2) + q[0]) / 2, (st.t.invertY(st.h / 2) + q[1]) / 2 ];
       const t1 = d3.zoomIdentity.translate(st.w / 2 - k1 * mid[0], st.h / 2 - k1 * mid[1]).scale(k1);
-      zsel.interrupt().transition().duration(dur * 0.45).ease(d3.easeCubicInOut).call(zoom.transform, t1)
-        .transition().duration(dur * 0.55).ease(d3.easeCubicInOut).call(zoom.transform, tt);
-    } else if (dur > 0) zsel.interrupt().transition().duration(dur).ease(d3.easeCubicInOut).call(zoom.transform, tt);
-    else zsel.call(zoom.transform, tt);
+      animate([[t1, dur * 0.45], [tt, dur * 0.55]]);
+    } else if (dur > 0) animate([[tt, dur]]);
+    else { zsel.interrupt(); if (fly) finishFly(); zsel.call(zoom.transform, tt); }
   }
 
   function select(s) {

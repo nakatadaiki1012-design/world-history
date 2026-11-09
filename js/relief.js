@@ -9,10 +9,43 @@ const RELIEF = (() => {
     loading[src] = new Promise(res => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = res; document.head.appendChild(s); });
     return loading[src];
   }
+  // 画像をほどく仕事は、できれば裏の作業員（Worker）にまかせる（地図を動かす手を止めない）
+  let worker = null, wid = 0;
+  const wcb = {};
+  function getWorker() {
+    if (worker !== null) return worker;
+    try {
+      const src = `self.onmessage = async e => {
+        const { id, url } = e.data;
+        try {
+          const bm = await createImageBitmap(await (await fetch(url)).blob());
+          const c = new OffscreenCanvas(bm.width, bm.height), x = c.getContext('2d', { willReadFrequently: true });
+          x.drawImage(bm, 0, 0);
+          const d = x.getImageData(0, 0, bm.width, bm.height).data, g = new Uint8Array(bm.width * bm.height);
+          for (let i = 0; i < g.length; i++) g[i] = d[i * 4];
+          self.postMessage({ id, w: bm.width, h: bm.height, g }, [g.buffer]);
+        } catch (err) { self.postMessage({ id, err: 1 }); }
+      };`;
+      worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      worker.onmessage = e => { const cb = wcb[e.data.id]; delete wcb[e.data.id]; if (cb) cb(e.data); };
+      worker.onerror = () => { worker = false; Object.keys(wcb).forEach(id => { const cb = wcb[id]; delete wcb[id]; cb({ err: 1 }); }); };
+    } catch (e) { worker = false; }
+    return worker;
+  }
   function decode(key, url) {
     if (cache[key]) return Promise.resolve(cache[key]);
+    if (!url) return Promise.resolve(null);
+    const w = getWorker();
+    if (!w) return decodeMain(key, url);
     return new Promise(res => {
-      if (!url) { res(null); return; }
+      const id = ++wid;
+      wcb[id] = r => { if (r.err) decodeMain(key, url).then(res); else { cache[key] = { w: r.w, h: r.h, g: r.g }; res(cache[key]); } };
+      w.postMessage({ id, url });
+    });
+  }
+  function decodeMain(key, url) {
+    if (cache[key]) return Promise.resolve(cache[key]);
+    return new Promise(res => {
       const im = new Image();
       im.onload = () => {
         const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
