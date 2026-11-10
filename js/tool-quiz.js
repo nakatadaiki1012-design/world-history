@@ -100,7 +100,8 @@ function quizMaker(course) {
         q => (q.region === p.region ? 3 : 0) + yearNear(q.born, p.born, unitAt(p.born)) + (roleWords(q.role).some(w => rw.includes(w)) ? 2 : 0), 3);
       if (others.length < 3) return null;
       let text = p.text;
-      [p.name, ...(p.name.split('=').length > 1 ? p.name.split('=') : [])].forEach(n => { if (n.length >= 2) text = text.split(n).join('この人物'); });
+      // 名前の一部（「アレクサンドロス大王」の「アレクサンドロス」など）も伏せる
+      [p.name, ...p.name.split(/[=＝（）()・\s]/), ...(p.name.match(/[ァ-ヶー]{3,}|[一-龠々]{2,}/g) || [])].filter((n, i, a) => n && n.length >= 2 && a.indexOf(n) === i).sort((a, b) => b.length - a.length).forEach(n => { text = text.split(n).join('この人物'); });
       const c = shuffle([p, ...others]);
       return { q: `次の説明にあてはまる人物はだれ？<div class="qres" style="margin-top:8px;font-weight:500">${esc(text)}</div>`, c: c.map(x => x.name), a: c.indexOf(p), exp: `${p.name}（${lifeSpan(p)}、${p.role || ''}）。`, person: p.id };
     },
