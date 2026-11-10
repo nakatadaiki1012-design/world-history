@@ -5,11 +5,11 @@
   let index = null;
   function build() {
     const L = [];
-    const add = (type, label, sub, href, keys, w) => L.push({ type, label, sub, href, keys: keys.map(norm).filter(Boolean), w: w || 1 });
+    const add = (type, label, sub, href, keys, w, full) => L.push({ type, label, sub, href, keys: keys.map(norm).filter(Boolean), w: w || 1, full: full ? norm(full) : '' });
     GLOSSARY.forEach(g => add('用語', g.term, `${'★'.repeat(g.rank || 1)} ${g.cat || ''}${g.year != null ? '・' + yearLabel(g.year) : ''}`, `#term/${encodeURIComponent(g.term)}`, [g.term, g.yomi], 1 + (g.rank || 1) * 0.2));
     STORIES.forEach(s => add('物語', s.title, `${STORY_KIND[storyKind(s)] || ''}・${s.period || ''}`, `#story/${s.id}/1`, [s.title, s.term, s.person && PERSON[s.person] ? PERSON[s.person].name : ''], 1.3));
-    PEOPLE.forEach(p => add('人物', p.name, `${p.role || ''}・${lifeSpan(p)}`, mapHash(fixYear(Math.round((p.born + p.died) / 2)), REGION_VIEW_OF[p.region] || 'world', 'p:' + p.id), [p.name, p.kana, ...(p.keys || [])], 1.2));
-    EVENTS.forEach((e, i) => add('出来事', e.title, `${yearLabel(e.year)}・${(REGION[e.region] || {}).name || ''}`, mapHash(e.year, REGION_VIEW_OF[e.region] || 'world', 'e:' + i), [e.title], 1));
+    PEOPLE.forEach(p => add('人物', p.name, `${p.role || ''}・${lifeSpan(p)}`, mapHash(fixYear(Math.round((p.born + p.died) / 2)), REGION_VIEW_OF[p.region] || 'world', 'p:' + p.id), [p.name, p.kana, ...(p.keys || [])], 1.2, (p.text || '') + (PERSON_FUN[p.id] || []).join('')));   // 説明や「実はこんな人」の中のことばでも見つかる（点数は低め）
+    EVENTS.forEach((e, i) => add('出来事', e.title, `${yearLabel(e.year)}・${(REGION[e.region] || {}).name || ''}`, mapHash(e.year, REGION_VIEW_OF[e.region] || 'world', 'e:' + i), [e.title], 1, (e.text || '') + (EVENT_FUN[e.title] || '')));
     POLITIES.forEach(p => add('国・王朝', p.name, span(p.start, p.end), mapHash(fixYear(Math.round((Math.max(p.start, YEAR_MIN) + Math.min(p.end, YEAR_MAX)) / 2)), REGION_VIEW_OF[p.region] || 'world', 's:' + p.id), [p.name, ...(p.alias || [])], 1.1));
     PLACES.forEach(pl => { const n = pl.names[pl.names.length - 1]; add('地名', pl.names.map(x => x.name).filter((v, i, a) => a.indexOf(v) === i).join('／'), pl.modern ? '今の' + pl.modern : '', mapHash(fixYear(Math.max(YEAR_MIN, n.from)), REGION_VIEW_OF[pl.region] || 'world', 'pl:' + pl.id), [...pl.names.map(x => x.name), pl.modern], 0.9); });
     return L;
@@ -21,6 +21,7 @@
     index.forEach(it => {
       let sc = 0;
       it.keys.forEach((x, i) => { let v = x === k ? 100 : x.startsWith(k) ? 60 - Math.min(20, x.length - k.length) : x.includes(k) ? 30 - Math.min(15, x.length - k.length) : 0; if (i > 1) v *= 0.7; if (v > sc) sc = v; });   // 名前・よみ以外（別名など）での一致は少し下げる
+      if (!sc && it.full && k.length >= 2 && it.full.includes(k)) sc = 12;   // 本文の中にあるだけなら、名前で見つかるものより後ろに
       if (sc) out.push({ it, sc: sc * it.w });
     });
     return out.sort((a, b) => b.sc - a.sc).map(o => o.it);
