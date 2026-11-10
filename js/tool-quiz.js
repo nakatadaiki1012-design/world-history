@@ -90,7 +90,7 @@ function quizMaker(course) {
       if (four.length < 4) return null;
       const newest = Math.random() < 0.5;
       const ans = four.slice().sort((a, b) => newest ? b.year - a.year : a.year - b.year)[0];
-      return { q: `次の出来事のうち、もっとも${newest ? '<b>新しい</b>' : '<b>古い</b>'}ものはどれ？`, c: four.map(e => e.title), a: four.indexOf(ans), exp: four.slice().sort((a, b) => a.year - b.year).map(e => `${e.title}（${yearLabel(e.year)}）`).join(' → ') };
+      return { q: `次の出来事のうち、もっとも${newest ? '<b>新しい</b>' : '<b>古い</b>'}ものはどれ？`, c: four.map(e => e.title), a: four.indexOf(ans), exp: four.slice().sort((a, b) => a.year - b.year).map(e => `${e.title}（${yearLabel(e.year)}）`).join(' → '), funEvent: ans.title };
     },
     who() {
       const p = pick(ppl.filter(p => p.text && p.text.length > 20)); if (!p) return null;
@@ -145,7 +145,20 @@ function quizMaker(course) {
 // まちがえた問題のノート（あとで復習できるように、問題そのものを保存する）
 const WRONG_KEY = 'wrongQ';
 function wrongList() { return store.get(WRONG_KEY, []); }
-function saveQ(q) { return { q: q.q, c: q.c, a: q.a, exp: q.exp || '', term: q.term, person: q.person, map: q.map, lesson: q.lesson ? { id: q.lesson.id, course: q.lesson.course, title: q.lesson.title } : null, t: Date.now() }; }
+// 答えに関係する「💡」の一言をさがす（人物の「実はこんな人」、出来事の「ここがおもしろい」）
+function quizFun(q) {
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const pf = typeof PERSON_FUN !== 'undefined' ? PERSON_FUN : {}, ef = typeof EVENT_FUN !== 'undefined' ? EVENT_FUN : {};
+  if (q.person && pf[q.person] && pf[q.person].length) return { h: '実はこんな人', t: pick(pf[q.person]) };
+  if (q.funEvent && ef[q.funEvent]) return { h: 'ここがおもしろい', t: ef[q.funEvent] };
+  if (q.term) {
+    if (ef[q.term]) return { h: 'ここがおもしろい', t: ef[q.term] };
+    const per = typeof PEOPLE !== 'undefined' && PEOPLE.find(p => p.name === q.term || p.name.split(/[（(]/)[0] === q.term);
+    if (per && pf[per.id] && pf[per.id].length) return { h: '実はこんな人', t: pick(pf[per.id]) };
+  }
+  return null;
+}
+function saveQ(q) { return { q: q.q, c: q.c, a: q.a, exp: q.exp || '', term: q.term, person: q.person, funEvent: q.funEvent, map: q.map, lesson: q.lesson ? { id: q.lesson.id, course: q.lesson.course, title: q.lesson.title } : null, t: Date.now() }; }
 function addWrong(q) { const L = wrongList().filter(x => x.q !== q.q); L.unshift(saveQ(q)); store.set(WRONG_KEY, L.slice(0, 150)); }
 function removeWrong(q) { const L = wrongList(); const M = L.filter(x => x.q !== q.q); if (M.length !== L.length) store.set(WRONG_KEY, M); }
 
@@ -225,6 +238,9 @@ registerTool('quiz', {
             if (ok) { score++; streak++; removeWrong(q); } else { streak = 0; addWrong(q); misses.push(q); }
             $$('button', ch).forEach((x, j) => { if (j === q.a) x.classList.add('ok'); else if (j === k) x.classList.add('ng'); });
             const res = el(`<div class="qres"><span class="mark" style="color:${ok ? 'var(--ok)' : 'var(--ng)'}">${ok ? '◯' : '✕'}</span>${esc(q.exp)}</div>`);
+            // 答えのあとに「実は…」をひとつ（人物・出来事・用語に関係するものがあれば）
+            const fun = quizFun(q);
+            if (fun) res.appendChild(el(`<div class="ev-fun" style="margin-top:8px">💡 <b>${esc(fun.h)}</b>　${esc(fun.t)}</div>`));
             const links = el('<div class="keys" style="margin-top:8px"></div>');
             if (q.map) links.appendChild(el(`<a class="chip" href="${mapHash(q.map.year, q.map.view, 's:' + q.map.id)}">🗺 地図でくわしく</a>`));
             if (q.person) links.appendChild(el(`<a class="chip" href="${mapHash(Math.round((PERSON[q.person].born + PERSON[q.person].died) / 2), REGION_VIEW[PERSON[q.person].region], 'p:' + q.person)}">🗺 足あとを見る</a>`));
