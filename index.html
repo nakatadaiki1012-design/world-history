@@ -735,6 +735,8 @@ a.term:hover { color: var(--ai); background: color-mix(in srgb, var(--ai) 10%, t
 .gl-m { display: block; font-size: 12px; }
 .gl-d { font-size: 13.5px; line-height: 1.7; margin-top: 2px; }
 .gl-ok { position: absolute; right: 6px; top: 6px; border: 0; background: none; font-size: 18px; }
+/* 端末で「動きを減らす」にしている人には、画面のアニメーションをほぼなくす */
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } }
 /* 指で使う画面では、小さなボタンを押しやすい大きさに（見た目はほぼそのまま、押せる範囲を広げる） */
 @media (pointer: coarse) {
   .pcard .pbadge { padding: 5px 12px; font-size: 13px; }

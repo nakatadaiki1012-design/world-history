@@ -227,8 +227,11 @@ function createHistMap(host, opts = {}) {
     updateTerrain();
   }
   // stages：[[行き先の transform, 時間(ms)], ...]
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
   function animate(stages) {
     zsel.interrupt();
+    // 端末の設定で「動きを減らす」にしている人には、飛ぶ動きをせず、すぐ行き先へ
+    if (reduceMotion && reduceMotion.matches) { if (fly) finishFly(); zsel.call(zoom.transform, stages[stages.length - 1][0]); return; }
     if (fly) finishFly();
     if (opts.mini || !st.w) {   // 小さい地図は、これまでどおり
       let tr = zsel; stages.forEach(([t, d]) => { tr = tr.transition().duration(d).ease(d3.easeCubicInOut).call(zoom.transform, t); });
