@@ -312,20 +312,12 @@ function createHistMap(host, opts = {}) {
   let detailK = 1;
   function makePath(k) {
     const tol = 0.7 / k;
-    // 投影の前に、経度・緯度で近すぎる点をとばす（画面で 0.4 ピクセルにもならない点は、計算するだけむだ）
-    const sc = pr && pr.scale ? pr.scale() : 0, dt = sc > 0 ? tol * 0.6 * 180 / (Math.PI * sc) : 0;
-    const thin = dt > 0 ? s => ({
-      _x: 0, _y: 0, _n: 0, _px: 0, _py: 0, _p: false,
-      point(x, y) { if (this._n++ === 0 || Math.abs(x - this._x) + Math.abs(y - this._y) >= dt) { this._x = x; this._y = y; this._p = false; s.point(x, y); } else { this._px = x; this._py = y; this._p = true; } },
-      lineStart() { this._n = 0; this._p = false; s.lineStart(); }, lineEnd() { if (this._p) s.point(this._px, this._py); this._p = false; s.lineEnd(); },
-      polygonStart() { s.polygonStart(); }, polygonEnd() { s.polygonEnd(); }, sphere() { s.sphere && s.sphere(); }
-    }) : s => s;
-    return d3.geoPath({ stream: out => thin(pr.stream({
+    return d3.geoPath({ stream: out => pr.stream({
       _x: NaN, _y: NaN, _n: 0,
       point(x, y) { if (this._n === 0 || Math.abs(x - this._x) + Math.abs(y - this._y) >= tol) { this._x = x; this._y = y; out.point(x, y); } this._n++; },
       lineStart() { this._n = 0; out.lineStart(); }, lineEnd() { out.lineEnd(); },
       polygonStart() { out.polygonStart(); }, polygonEnd() { out.polygonEnd(); }, sphere() { out.sphere && out.sphere(); }
-    })) });
+    }) });
   }
   // 拡大のしかたが大きく変わったら、形を細かさに合わせて作りなおす
   // 一度計算した細かさの形はとっておく（拡大・縮小を行ったり来たりしても、すぐ出る）
@@ -811,6 +803,14 @@ function createHistMap(host, opts = {}) {
       const cx = d3.mean(grp, j => ppl[j].ox), cy = d3.mean(grp, j => ppl[j].oy);
       grp.forEach((j, k) => { const a = -Math.PI / 2 + 2 * Math.PI * k / n; ppl[j].sx = cx + rr * Math.cos(a); ppl[j].sy = cy + rr * Math.sin(a); ppl[j].spread = true; });
     });
+    // それでも写真どうしが大きく重なるとき（世界全体の地図やスマホ）は、大事な人から順に残し、重なる人は寄ったときに出す
+    if (!st.story) {
+      const keep = [], imp = x => (isSelP(x.p.id) ? 1e6 : 0) + (PORTRAITS[x.p.id] ? 1e4 : 0) + (x.p.text || '').length;
+      ppl.filter(x => !x.hide).sort((a, b) => imp(b) - imp(a)).forEach(x => {
+        if (!isSelP(x.p.id) && keep.some(y => Math.hypot(x.sx - y.sx, x.sy - y.sy) < (x.r + y.r) * (st.w < 600 ? 1 : 0.8))) x.hide = true;
+        else keep.push(x);
+      });
+    }
     ppl = ppl.filter(x => !x.hide);
     ppl.forEach(x => boxes.push([x.sx - x.r, x.sy - x.r, x.sx + x.r, x.sy + x.r]));
 

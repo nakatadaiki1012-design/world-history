@@ -116,7 +116,9 @@ function quizMaker(course) {
       const g = termPick(); if (!g) return null;
       const others = termOthers(g, 3); if (others.length < 3) return null;
       const c = shuffle([g, ...others]);
-      const hide = (x) => { let d = x.def; [x.term].forEach(n => { d = d.split(n).join('これ'); }); return d.length > 70 ? d.slice(0, 68) + '…' : d; };
+      // 用語そのものに加えて、用語の中のカタカナ・漢字のまとまり（2文字以上）も伏せる（「ウィーン包囲」の説明に「ウィーンを包囲」とあると、すぐわかってしまうので）
+      const frag = (g.term.match(/[ァ-ヶー]{2,}|[一-龠々]{2,}/g) || []).filter(f => f !== g.term).sort((a, b) => b.length - a.length);
+      const hide = (x) => { let d = x.def; [x.term].forEach(n => { d = d.split(n).join('これ'); }); frag.forEach(f => { d = d.split(f).join('〇〇'); }); return d.length > 70 ? d.slice(0, 68) + '…' : d; };
       return { q: `「${esc(g.term)}」の説明として正しいものはどれ？`, c: c.map(hide), a: c.indexOf(g), exp: `${g.term}：${g.def}`, term: g.term };
     },
     termera() {
