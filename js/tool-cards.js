@@ -59,7 +59,7 @@ registerTool('cards', {
         const front = cfg.dir === 'term' ? `<div class="cterm">${esc(g.term)}</div><div class="muted">${esc(yomi)}</div>` : `<div class="cdef">${esc(hideTerm(g))}</div>`;
         const back = `<div class="cterm" style="font-size:24px">${esc(g.term)} <small class="muted">${esc(yomi)}</small></div>
           <div class="muted" style="font-size:12.5px">${esc(g.cat || '')}${REGION[g.region] ? '・' + esc(REGION[g.region].name) : ''}${g.year != null ? '・' + esc(yearLabel(g.year)) : ''}　${'★'.repeat(g.rank || 1)}</div>
-          <div class="cdef">${esc(g.def)}</div>`;
+          <div class="cdef">${esc(g.def)}</div>${(() => { const f = typeof quizFun === 'function' ? quizFun({ term: g.term }) : null; return f ? `<div class="ev-fun" style="margin-top:10px;text-align:left;font-size:14px">💡 <b>${esc(f.h)}</b>　${esc(f.t)}</div>` : ''; })()}`;
         box.innerHTML = '';
         const c = el(`<div class="cplay">
           <div class="qmeta"><span>${i + 1} / ${deck.length}</span><span>${S[g.term] ? '復習' : '新しい語'}</span></div>
@@ -125,7 +125,7 @@ registerTool('cards', {
       show();
     }
     // 説明の中の用語そのものはかくす（説明→用語のとき）
-    function hideTerm(g) { let d = g.def; [g.term, ...g.term.split(/[=＝・]/).filter(x => x.length >= 2)].forEach(n => { d = d.split(n).join('〔　　〕'); }); return d; }
+    function hideTerm(g) { let d = g.def; [g.term, ...g.term.split(/[=＝・]/).filter(x => x.length >= 2), ...(g.term.match(/[ァ-ヶー]{2,}|[一-龠々]{2,}/g) || [])].sort((a, b) => b.length - a.length).forEach(n => { d = d.split(n).join('〔　　〕'); }); return d; }   // 用語の中のカタカナ・漢字のまとまりも伏せる
     setup();
     return () => { if (onKey) document.removeEventListener('keydown', onKey); SPEECH.stop(); };
   }
