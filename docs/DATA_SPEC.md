@@ -259,6 +259,8 @@ window.IMAGES = (window.IMAGES || []).concat([
 
 ## 9. 人物のくわしいプロフィール（PERSON_DETAIL）
 
+`js/data/people-detail.js`（手書き）と `js/data/people-detail-2.js`（その2。JSON.parse で読む形）の2つに分かれている。全員分ある。
+
 ```js
 window.PERSON_DETAIL = Object.assign(window.PERSON_DETAIL || {}, {
   'napoleon': {
