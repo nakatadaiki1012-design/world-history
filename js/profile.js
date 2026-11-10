@@ -38,7 +38,7 @@ function openProfile(id) {
         ${figureHtml('person:' + p.id, 2)}
         ${d.legacy ? `<h3>その後の世界への影響</h3><p>${esc(d.legacy)}</p>` : ''}
         ${(d.life || []).length ? `<h3>年表</h3><ol class="prof-life">${d.life.map(l => `<li><b class="num">${esc(yearLabel(l.year))}</b><span>${esc(l.text)}</span></li>`).join('')}</ol>` : ''}
-        ${(d.terms || p.keys || []).length ? `<h3>重要語句</h3><div class="keys">${(d.terms || p.keys).map(k => `<span>${esc(k)}</span>`).join('')}</div>` : ''}
+        ${(d.terms || p.keys || []).length ? `<h3>重要語句</h3><div class="keys">${(d.terms || p.keys).map(k => typeof TERM !== 'undefined' && TERM[k] ? `<a class="term" data-term="${esc(k)}" href="#term/${encodeURIComponent(k)}"><span>${esc(k)}</span></a>` : `<span>${esc(k)}</span>`).join('')}</div>` : ''}
         <h3>同じ時代を生きた人物</h3><ul class="lst prof-same"></ul>
       </div>
     </article>
