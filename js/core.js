@@ -9,20 +9,49 @@ function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { co
 function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
 
 // --- 保存（ブラウザの中だけ。使えないときは保存しないで動く） ---
+// 学習の記録が壊れないように：
+//  ・ときどき控え（.bak）を別に保存しておく
+//  ・読みこんだ記録が壊れていたら、消さずに .broken に取っておき、控えからもどす
 const store = {
   key: 'worldHistoryLab.v1',
   data: null,
-  load() { if (this.data) return this.data; try { this.data = JSON.parse(localStorage.getItem(this.key)) || {}; } catch (e) { this.data = {}; } return this.data; },
+  _bakT: 0,
+  _get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  _put(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },   // 保存できない環境・容量いっぱい
+  _parse(raw) { if (!raw) return null; try { const d = JSON.parse(raw); return d && typeof d === 'object' && !Array.isArray(d) ? d : null; } catch (e) { return null; } },
+  load() {
+    if (this.data) return this.data;
+    const raw = this._get(this.key);
+    let d = this._parse(raw);
+    if (!d) {
+      if (raw) this._put(this.key + '.broken', raw);   // 壊れた記録も、あとで調べられるように取っておく
+      d = this._parse(this._get(this.key + '.bak')) || {};
+    }
+    this.data = d;
+    return d;
+  },
   get(k, d) { const v = this.load()[k]; return v === undefined ? d : v; },
-  set(k, v) { this.load()[k] = v; try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) { /* 保存できない環境 */ } }
+  set(k, v) {
+    this.load()[k] = v;
+    const s = JSON.stringify(this.data);
+    this._put(this.key, s);
+    // 控えは、変えてから少し待って1回だけ書く（続けて変えても毎回は書かない）
+    clearTimeout(this._bakT);
+    this._bakT = setTimeout(() => this.backup(), 2000);
+  },
+  backup() { clearTimeout(this._bakT); if (this.data) this._put(this.key + '.bak', JSON.stringify(this.data)); }
 };
+// 画面を閉じる・ほかのアプリに切りかえるときにも、控えを書いておく
+window.addEventListener('pagehide', () => store.backup());
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') store.backup(); });
 
 // --- 道具の登録 ---
 const TOOLS = {};
 function registerTool(id, def) { TOOLS[id] = Object.assign({ id }, def); }
 
 // --- データ（読みこめなかったファイルがあっても動くように） ---
-const POLITIES = (window.POLITIES || []).filter(p => p && p.id && p.name);
+const num = v => typeof v === 'number' && isFinite(v);
+const POLITIES = (window.POLITIES || []).filter(p => p && p.id && p.name && num(p.start) && num(p.end));
 // 同じ地域の国は同じ系統の色なので、となりどうしが見分けやすいように、国ごとに色合い・明るさを少しずらす（いつも同じずらし方）
 (function varyColors() {
   const hash = str => { let h = 2166136261; for (const c of str) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
@@ -36,7 +65,7 @@ const POLITIES = (window.POLITIES || []).filter(p => p && p.id && p.name);
   });
 })();
 const POLITY = Object.fromEntries(POLITIES.map(p => [p.id, p]));
-const PEOPLE = (window.PEOPLE || []).filter(p => p && p.id && p.name).sort((a, b) => a.born - b.born);
+const PEOPLE = (window.PEOPLE || []).filter(p => p && p.id && p.name && num(p.born) && num(p.died) && Array.isArray(p.places)).sort((a, b) => a.born - b.born);
 // 人物データの polity が古い書き方の id のときは、今の id に読みかえる（年代でえらぶものは関数）
 (function () {
   const A = { babylonia: 'babylon1', macedonia: 'macedon', 'roman-republic': 'rome-republic', 'roman-empire': y => (y > 394 ? 'west-rome' : 'rome-empire'),
@@ -47,7 +76,7 @@ const PEOPLE = (window.PEOPLE || []).filter(p => p && p.id && p.name).sort((a, b
   PEOPLE.forEach(p => { const a = A[p.polity]; if (!a) return; const mid = Math.round((p.born + p.died) / 2); p.polity = typeof a === 'function' ? a(mid) : a; });
 })();
 const PERSON = Object.fromEntries(PEOPLE.map(p => [p.id, p]));
-const EVENTS = (() => { const seen = new Set(); return (window.EVENTS || []).filter(e => e && e.title && !seen.has(e.title) && seen.add(e.title)).sort((a, b) => a.year - b.year); })();
+const EVENTS = (() => { const seen = new Set(); return (window.EVENTS || []).filter(e => e && e.title && num(e.year) && num(e.lon) && num(e.lat) && !seen.has(e.title) && seen.add(e.title)).sort((a, b) => a.year - b.year); })();
 const LESSONS = [];
 const PORTRAITS = window.PORTRAITS || {};
 // 物語・授業・画像・用語などは、地図を先に出すため、あとから読みこむ（absorbLate で中身を入れる）
@@ -114,25 +143,33 @@ const EVENT_IDX = Object.fromEntries(EVENTS.map((e, i) => [e.title, i]));
 const CAUSES = [];
 const STORY_CAUSES = {};
 // あとから読みこんだデータを、上の入れものに入れる（何度よんでも同じ結果）
+// 形のおかしいデータがまじっていても、そのデータだけをとばして、ほかは使えるようにする
+const okStr = v => typeof v === 'string' && v.trim() !== '';
+const okObj = v => v && typeof v === 'object' && !Array.isArray(v);
+function safely(what, fn) { try { fn(); } catch (e) { console.warn(`データ「${what}」の取りこみでエラー（とばしました）:`, e); } }
 function absorbLate() {
-  const fill = (arr, src) => { arr.length = 0; src.forEach(x => arr.push(x)); };
-  fill(LESSONS, (window.LESSONS || []).filter(l => l && l.id));
-  fill(STORIES, (window.STORIES || []).filter(s => s && s.id && s.steps && s.steps.length));
-  const T = window.STORY_TALK || {};
-  STORIES.forEach(s => { const a = T[s.id]; if (a) s.steps.forEach((st, i) => { if (a[i] && !st.talk) st.talk = a[i]; }); });
-  // 書き直した語り（疑問の先回り・伏線などを入れたもの）は、前の語りより優先する
-  const T2 = window.STORY_TALK_NEW || {};
-  STORIES.forEach(s => { const a = T2[s.id]; if (a && a.length === s.steps.length) s.steps.forEach((st, i) => { if (a[i]) st.talk = a[i]; }); });
+  const fill = (arr, src) => { arr.length = 0; (Array.isArray(src) ? src : []).forEach(x => arr.push(x)); };
+  safely('授業', () => fill(LESSONS, (window.LESSONS || []).filter(l => l && l.id)));
+  safely('物語', () => fill(STORIES, (window.STORIES || []).filter(s => s && s.id && Array.isArray(s.steps) && s.steps.length && s.steps.every(st => st && typeof st.year === 'number' && isFinite(st.lon) && isFinite(st.lat)))));
+  safely('物語の語り', () => {
+    const T = okObj(window.STORY_TALK) ? window.STORY_TALK : {};
+    STORIES.forEach(s => { const a = T[s.id]; if (Array.isArray(a)) s.steps.forEach((st, i) => { if (okStr(a[i]) && !st.talk) st.talk = a[i]; }); });
+    // 書き直した語り（疑問の先回り・伏線などを入れたもの）は、前の語りより優先する（場面の数が合うときだけ）
+    const T2 = okObj(window.STORY_TALK_NEW) ? window.STORY_TALK_NEW : {};
+    STORIES.forEach(s => { const a = T2[s.id]; if (Array.isArray(a) && a.length === s.steps.length) s.steps.forEach((st, i) => { if (okStr(a[i])) st.talk = a[i]; }); });
+  });
   STORIES.forEach(s => { STORY[s.id] = s; });
-  Object.assign(PERSON_DETAIL, window.PERSON_DETAIL || {});
-  Object.assign(EVENT_FUN, window.EVENT_FUN || {});
-  Object.assign(PERSON_FUN, window.PERSON_FUN || {});
-  Object.keys(IMAGES).forEach(k => delete IMAGES[k]);
-  (window.IMAGES || []).forEach(m => { if (m && m.key && m.file) (IMAGES[m.key] = IMAGES[m.key] || []).push(m); });
-  fill(CAUSES, (window.CAUSES || []).filter(c => c && EVENT_IDX[c.from] != null && EVENT_IDX[c.to] != null));
-  Object.assign(STORY_CAUSES, window.STORY_CAUSES || {});
-  if (typeof absorbGlossary === 'function') absorbGlossary();
-  SPEECH.resetDict();
+  safely('人物のくわしいページ', () => Object.entries(okObj(window.PERSON_DETAIL) ? window.PERSON_DETAIL : {}).forEach(([k, d]) => { if (PERSON[k] && okObj(d) && Array.isArray(d.story)) PERSON_DETAIL[k] = d; }));
+  safely('ここがおもしろい', () => Object.entries(okObj(window.EVENT_FUN) ? window.EVENT_FUN : {}).forEach(([k, v]) => { if (okStr(v)) EVENT_FUN[k] = v; }));
+  safely('実はこんな人', () => Object.entries(okObj(window.PERSON_FUN) ? window.PERSON_FUN : {}).forEach(([k, a]) => { if (PERSON[k] && Array.isArray(a)) { const b = a.filter(okStr); if (b.length) PERSON_FUN[k] = b; } }));
+  safely('画像', () => {
+    Object.keys(IMAGES).forEach(k => delete IMAGES[k]);
+    (window.IMAGES || []).forEach(m => { if (m && okStr(m.key) && okStr(m.file)) (IMAGES[m.key] = IMAGES[m.key] || []).push(m); });
+  });
+  safely('原因と結果', () => fill(CAUSES, (window.CAUSES || []).filter(c => c && EVENT_IDX[c.from] != null && EVENT_IDX[c.to] != null)));
+  safely('物語の原因', () => Object.assign(STORY_CAUSES, okObj(window.STORY_CAUSES) ? window.STORY_CAUSES : {}));
+  if (typeof absorbGlossary === 'function') safely('用語', absorbGlossary);
+  safely('読み', () => SPEECH.resetDict());
 }
 const CAUSE_KIND = { background: '背景', cause: '原因', trigger: 'きっかけ', result: '結果' };
 const causesOf = i => CAUSES.filter(c => c.to === EVENTS[i].title).map(c => ({ i: EVENT_IDX[c.from], kind: c.kind, why: c.why }));

@@ -345,3 +345,9 @@ window.GLOSSARY = (window.GLOSSARY || []).concat([{
 ## 11. 人物の「💡 実はこんな人」（PERSON_FUN）
 
 `js/data/person-fun.js` に、人物 id → 一言3つ（各60〜140字）で書く。人物の説明・くわしいページにない、「知っているつもりでも、実は」と思える事実を選ぶ。伝説は「〜と伝えられています」、学説の分かれる話は「〜という説もあります」と書き分ける。地図の人物欄・人物年表・くわしいページの上に出る。
+
+## 12. データの点検と、安全な足し方
+
+- `node tools/check-data.js`：全データを点検する（コミット前に必ず。GitHub でも自動で走る）。
+- `node tools/data-add.js <event-fun|person-fun|person-detail|story-talk> <JSON>`：JSON.parse 形式のファイルに安全に足す。点検でエラーなら元にもどす。
+- くわしくは `CLAUDE.md`。
