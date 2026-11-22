@@ -277,6 +277,31 @@ function createHistMap(host, opts = {}) {
     if (flying) { flying = false; gOver.style('display', null); placeLater(0); }
     endGest(); updateDetail(); if (st.k < 3.5) inset.hidden = true; else if (!inset.hidden) drawInset(true); drawInsetLater(); scheduleRelief(); if (ev.sourceEvent && startT && (Math.abs(startT.x - st.t.x) + Math.abs(startT.y - st.t.y) > 4 || Math.abs(startT.k - st.t.k) > 0.01)) { markNear(); showViews(4000); } });
   zsel.call(zoom).on('dblclick.zoom', null);
+  // --- ダブルタップ・ダブルクリックで、その場所を中心に拡大（Shift を押しながらだと縮小） ---
+  // スマホのブラウザはダブルタップを知らせてくれないことがあるので、タップを自分で数える
+  function zoomAt(clientX, clientY, f) {
+    const r = svgEl.getBoundingClientRect(); if (!r.width) return;
+    const x = (clientX - r.left) * st.w / r.width, y = (clientY - r.top) * st.h / r.height;
+    const t = st.t, k = clamp(t.k * f, 1, 400); if (k === t.k) return;
+    const t1 = zoom.constrain()(d3.zoomIdentity.translate(x - (x - t.x) * k / t.k, y - (y - t.y) * k / t.k).scale(k), [[0, 0], [st.w, st.h]], zoom.translateExtent());
+    st.cam = null;
+    animate([[t1, 320]]);
+  }
+  const onMap = el => el && (svgEl.contains(el) || ovEl.contains(el));
+  let tapDown = null, lastTap = null;
+  stage.addEventListener('pointerdown', ev => { if (ev.pointerType === 'mouse' || !ev.isPrimary) { tapDown = null; return; } tapDown = { x: ev.clientX, y: ev.clientY, t: performance.now() }; });
+  stage.addEventListener('pointerup', ev => {
+    if (opts.mini || ev.pointerType === 'mouse' || !tapDown || !onMap(ev.target)) return;
+    const quick = performance.now() - tapDown.t < 300 && Math.hypot(ev.clientX - tapDown.x, ev.clientY - tapDown.y) < 10;
+    tapDown = null;
+    if (!quick) { lastTap = null; return; }
+    const now = performance.now();
+    if (lastTap && now - lastTap.t < 350 && Math.hypot(ev.clientX - lastTap.x, ev.clientY - lastTap.y) < 30) { lastTap = null; zoomAt(ev.clientX, ev.clientY, 2); }
+    else lastTap = { x: ev.clientX, y: ev.clientY, t: now };
+  });
+  stage.addEventListener('pointercancel', () => { tapDown = null; });
+  svgEl.addEventListener('dblclick', ev => { if (opts.mini) return; ev.preventDefault(); zoomAt(ev.clientX, ev.clientY, ev.shiftKey ? 0.5 : 2); });
+  ovEl.addEventListener('dblclick', ev => { if (opts.mini) return; ev.preventDefault(); zoomAt(ev.clientX, ev.clientY, ev.shiftKey ? 0.5 : 2); });
   // 最初に少しだけ見せて、ここにあることを知らせる
   setTimeout(() => showViews(3500), 300);
   $$('.hm-tools button[data-z]', root).forEach(b => b.addEventListener('click', () => {

@@ -2,7 +2,7 @@
 (function () {
   const STEPS = [
     { sel: '.hm-slider', title: '① 年代のツマミ', text: '左右に動かすと年が変わり、地図の国・王朝や、そのころの人物・出来事が入れかわります。▶ をおすと自動で進みます。' },
-    { sel: '.hm-stage', title: '② 地図', text: '色のついた国・人物の写真・地名をおすと、説明が出ます。指2本（パソコンはホイール）で拡大できます。' },
+    { sel: '.hm-stage', title: '② 地図', text: '色のついた国・人物の写真・地名をおすと、説明が出ます。指2本・ダブルタップ（パソコンはホイール・ダブルクリック）で拡大できます。' },
     { sel: () => [...document.querySelectorAll('#grpnav button, #subnav button')].find(b => b.textContent.includes('物語')), title: '③ 物語でたどる', text: '出来事・人物の一生・テストに出る用語を、地図が動きながら語ります。🎙 の語りつき。' },
     { sel: '#searchBtn', title: '④ 探す', text: '用語・人物・物語・出来事・地名を、まとめて探せます（ひらがなの読みでもOK）。' },
     { sel: () => [...document.querySelectorAll('#grpnav button')].find(b => b.textContent.includes('挑戦')), title: '⑤ 挑戦', text: 'クイズ・暗記カード・学習の記録。まちがえた問題は、あとで復習できます。' }
