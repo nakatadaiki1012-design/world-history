@@ -83,6 +83,32 @@ registerTool('map', {
       else helpTab();
     }
 
+    // --- 地名を「今見ている年」で説明する（その年の名前・どの国の町か・そのころここで何があったか） ---
+    function placeNow(pl, y) {
+      const nm = placeNameAt(pl, y), name = nm ? nm.name : pl.modern;
+      const pt = [pl.lon, pl.lat];
+      const dist = (lon, lat) => Math.hypot((lon - pl.lon) * Math.cos(pl.lat * Math.PI / 180), lat - pl.lat);
+      // その年に、ここをふくむ国（いちばん小さい＝くわしいもの）と、ここを都にしていた国
+      let ruler = null;
+      try { ruler = GEO.politiesAt(y).filter(f => d3.geoContains(f, pt)).sort((a, b) => (a.area || 0) - (b.area || 0))[0] || null; } catch (e) { ruler = null; }
+      const rp = ruler && ruler.properties.p;
+      const capOf = POLITIES.find(p => p.start <= y && y <= p.end && (() => { const c = GEO.capitalAt(p, y); return c && dist(c.lon, c.lat) < 0.2; })());
+      // そのころ、ここで起きていたこと：物語の場面（年が近いもの）→ なければ出来事
+      let step = null, sd = 61;
+      STORIES.forEach(st => st.steps.forEach((x, i) => { const d = Math.abs(x.year - y); if (d < sd && dist(x.lon, x.lat) < 0.5 && x.text) { sd = d; step = { st, i, x }; } }));
+      let ev = null, ed = 41;
+      EVENTS.forEach((e, i) => { const d = Math.abs(e.year - y); if (d < ed && dist(e.lon, e.lat) < 0.5) { ed = d; ev = { e, i }; } });
+      // 文を短く（文の切れ目で）
+      const cut = (t, n) => { t = String(t || ''); if (t.length <= n) return t; const k = t.lastIndexOf('。', n); return k > 30 ? t.slice(0, k + 1) : t.slice(0, n - 1) + '…'; };
+      // 地名には町だけでなく地方（ガリア・メソポタミアなど）もあるので、「〜の支配下」と書く
+      const who = capOf ? `は、${capOf.name}の都でした。` : rp ? `は、${rp.name}の支配下にありました。` : '。';
+      const lead = `${yearLabel(y)}ごろの${name}${who}`;
+      let what = '', link = null;
+      if (step) { const sn = step.st.title.split(/\s*[―—]\s*/)[0]; what = `${yearLabel(step.x.year)}${step.x.year !== y ? 'ごろ' : ''}（${sn}「${step.x.title}」）：${cut(step.x.text, 110)}`; link = { kind: 'story', st: step.st, i: step.i }; }
+      else if (ev) { what = `${yearLabel(ev.e.year)}、${ev.e.title}：${cut(ev.e.text, 110)}`; link = { kind: 'event', i: ev.i }; }
+      return { name, lead, what, link };
+    }
+
     // --- えらんだもの（地名・国・出来事・人物）に関係する物語と用語 ---
     // 物語は「そこを通る場面が多いもの」を上に。はじめる場面は、いちばん関係のある場面から
     function relatedOf(s) {
@@ -154,7 +180,9 @@ registerTool('map', {
       if (!r.label) { qb.hidden = true; return; }
       qb.hidden = false;
       const short = t => (t.length > 16 ? t.slice(0, 15) + '…' : t);
+      const now = s.type === 'place' && PLACE[s.id] ? placeNow(PLACE[s.id], map.year) : null;
       qb.innerHTML = `<div class="q-head"><b>${esc(r.label)}</b><button type="button" class="q-x" aria-label="とじる">✕</button></div>`
+        + (now ? `<p class="q-now">${esc(now.lead)}${now.what ? ' ' + esc(now.what) : ''}</p>` : '')
         + `<div class="q-row">${r.stories.slice(0, 2).map((st, k) => `<button type="button" class="chip q-st" data-k="${k}">▶ ${esc(short(st.title))}</button>`).join('')}`
         + `${r.terms.slice(0, 2).map(termLink).join('')}<button type="button" class="chip q-more">説明・ほかの物語 ↓</button></div>`;
       $$('.q-st', qb).forEach(b => b.addEventListener('click', () => { const st = r.stories[+b.dataset.k]; startStory(st, r.start.get(st) || 0); }));
@@ -295,11 +323,21 @@ registerTool('map', {
         <div class="muted" style="font-size:13px">◇ 地名・${esc((REGION[pl.region] || {}).name || '')}</div>
         <h2>${esc(nm ? nm.name : pl.modern)}</h2>
         <div class="muted">今の名前：${esc(pl.modern || '')}</div>
+      </div>`));
+      // 今見ている年の、この町（そのあとに、関係する物語・用語）
+      if (!STORIES.length && window.ensureStories) ensureStories();
+      const now = placeNow(pl, map.year);
+      const nowBox = el(`<div class="place-now"><p>${esc(now.lead)}</p>${now.what ? `<p class="pn-what">${esc(now.what)}${now.link ? ` <button type="button" class="linkbtn">${now.link.kind === 'story' ? '▶ この場面へ' : '◆ この出来事へ'}</button>` : ''}</p>` : ''}</div>`);
+      const nb = $('.linkbtn', nowBox);
+      if (nb) nb.addEventListener('click', () => { const L = now.link; if (L.kind === 'story') startStory(L.st, L.i); else { const e = EVENTS[L.i]; map.setYear(e.year); map.select({ type: 'event', id: L.i }); } });
+      body.appendChild(nowBox);
+      relatedSection({ type: 'place', id: pl.id });
+      body.appendChild(el(`<div>
+        <h3>${esc(nm ? nm.name : pl.modern)}について</h3>
         ${figureHtml('place:' + pl.id)}
         <p>${linkTerms(pl.text || '')}</p>
         ${pl.fun ? `<div class="ev-fun">💡 <b>ここがおもしろい</b>　${esc(pl.fun)}</div>` : ''}
       </div>`));
-      relatedSection({ type: 'place', id: pl.id });
       body.appendChild(el('<h3>名前のうつりかわり（おすとその年へ）</h3>'));
       const ol = el('<ol class="places"></ol>');
       pl.names.forEach(n => {

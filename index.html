@@ -554,6 +554,11 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 /* 地図でえらんだものの「関係する物語・用語」（スマホ・タブレットで地図の下に出る） */
 .hm-quick { position: absolute; left: 6px; right: 6px; bottom: 6px; z-index: 6; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 4px 8px 6px; box-shadow: 0 4px 16px rgba(0,0,0,.18); font-size: 13px; }
 .hm-quick[hidden] { display: none; }
+.hm-quick .q-now { margin: 0 0 6px; font-size: 13px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.place-now { margin: 8px 0 4px; padding: 9px 12px; border-radius: 10px; background: var(--chip); border-left: 4px solid var(--accent); }
+.place-now p { margin: 0 0 4px; }
+.place-now .pn-what { font-size: .95em; }
+.place-now .linkbtn { border: 0; background: none; color: var(--accent); font-weight: 700; padding: 0 2px; cursor: pointer; }
 .hm-quick .q-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 2px; }
 .hm-quick .q-head b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hm-quick .q-x { border: 0; background: none; font-size: 16px; min-width: 32px; min-height: 32px; color: var(--muted); }
