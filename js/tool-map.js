@@ -70,6 +70,7 @@ registerTool('map', {
       // ちがうものをえらんだら、説明はいちばん上から
       const sk = s ? s.type + ':' + s.id : story ? 'story:' + story.id : tab;
       if (sk !== lastSelKey) { body.scrollTop = 0; lastSelKey = sk; }
+      quickBar(story ? null : s);
       if (story) return storyPanel();
       if (s && s.type === 'polity' && POLITY[s.id]) return polityDetail(POLITY[s.id]);
       if (s && s.type === 'person' && PERSON[s.id]) return personDetail(PERSON[s.id]);
@@ -80,6 +81,85 @@ registerTool('map', {
       else if (tab === 'events') eventsTab();
       else if (tab === 'stories') storiesTab();
       else helpTab();
+    }
+
+    // --- えらんだもの（地名・国・出来事・人物）に関係する物語と用語 ---
+    // 物語は「そこを通る場面が多いもの」を上に。はじめる場面は、いちばん関係のある場面から
+    function relatedOf(s) {
+      const out = { stories: [], start: new Map(), terms: [], label: '' };
+      if (!s) return out;
+      const dist = (lon, lat, x, y) => Math.hypot((lon - x) * Math.cos(y * Math.PI / 180), lat - y);
+      const score = new Map();
+      // 地名・国では、いま地図で見ている年に近い場面ほど重く数える（100年のローマなら、中世より古代の物語を上に）
+      const yw = x => (s.type === 'place' || s.type === 'polity') ? 1 / (1 + Math.abs(x.year - map.year) / 150) : 1;
+      const bump = (st, i, v) => { const w = v * yw(st.steps[i]); score.set(st, (score.get(st) || 0) + w); const j = out.start.get(st); if (j === undefined || yw(st.steps[i]) > yw(st.steps[j])) out.start.set(st, i); };
+      const term = n => { if (n && TERM[n] && !out.terms.includes(n)) out.terms.push(n); };
+      if (s.type === 'place' && PLACE[s.id]) {
+        const pl = PLACE[s.id], nm = placeNameAt(pl, map.year);
+        out.label = nm ? nm.name : pl.modern;
+        STORIES.forEach(st => st.steps.forEach((x, i) => {
+          if (dist(x.lon, x.lat, pl.lon, pl.lat) < 0.5) bump(st, i, 2);
+          else if ((x.marks || []).some(m => dist(m.lon, m.lat, pl.lon, pl.lat) < 0.3)) bump(st, i, 1);
+        }));
+        pl.names.forEach(n => term(n.name)); term(pl.modern);
+      } else if (s.type === 'polity' && POLITY[s.id]) {
+        const p = POLITY[s.id]; out.label = p.name;
+        STORIES.forEach(st => st.steps.forEach((x, i) => { if ((x.polities || []).includes(p.id)) bump(st, i, 1); }));
+        term(p.name); term(p.full); (p.keys || []).slice(0, 4).forEach(term);
+      } else if (s.type === 'event' && EVENTS[s.id]) {
+        const e = EVENTS[s.id]; out.label = e.title;
+        STORIES.forEach(st => {
+          if (st.term === e.title) bump(st, 0, 10);
+          st.steps.forEach((x, i) => { if (x.title === e.title) bump(st, i, 5); else if (Math.abs(x.year - e.year) <= 2 && dist(x.lon, x.lat, e.lon, e.lat) < 0.6) bump(st, i, 2); });
+        });
+        term(e.title);
+      } else if (s.type === 'person' && PERSON[s.id]) {
+        const p = PERSON[s.id]; out.label = p.name;
+        STORIES.forEach(st => { if (st.person === p.id) bump(st, 0, 100); st.steps.forEach((x, i) => { if ((x.people || []).includes(p.id)) bump(st, i, 1); }); });
+        term(p.name); term(p.name.split(/[（(]/)[0]); (p.keys || []).slice(0, 4).forEach(term);
+      }
+      const y = map.year;
+      out.stories = [...score.entries()].sort((a, b) => b[1] - a[1] || Math.abs(a[0].steps[0].year - y) - Math.abs(b[0].steps[0].year - y)).map(x => x[0]).slice(0, 12);
+      return out;
+    }
+    const termLink = t => `<a class="term chip" data-term="${esc(t)}" href="#term/${encodeURIComponent(t)}">📘 ${esc(t)}</a>`;
+    // 横の欄に「関係する物語」「関係する用語」を出す
+    function relatedSection(s) {
+      if (!STORIES.length && window.ensureStories) ensureStories();   // 届いたら、横の欄がかき直される
+      const r = relatedOf(s);
+      if (r.terms.length) body.appendChild(el(`<div><h3>関係する用語</h3><div class="keys">${r.terms.map(termLink).join('')}</div></div>`));
+      if (!STORIES.length) { body.appendChild(el('<p class="muted" style="font-size:13px">関係する物語を読みこんでいます…</p>')); return; }
+      if (!r.stories.length) return;
+      body.appendChild(el(`<h3>関係する物語（${r.stories.length}${r.stories.length >= 12 ? '+' : ''}）</h3>`));
+      const ul = el('<ul class="lst"></ul>');
+      r.stories.forEach(st => {
+        const i = r.start.get(st) || 0;
+        const li = el(`<li><button type="button"><span class="sw" style="background:${(REGION[st.region] || {}).color || '#555'}"></span><span><b>▶ ${esc(st.title)}</b><br><span class="muted" style="font-size:12px">${esc(st.period || '')}${i ? `・${i + 1}場面目から` : ''}</span></span></button></li>`);
+        li.firstChild.addEventListener('click', () => startStory(st, i));
+        ul.appendChild(li);
+      });
+      body.appendChild(ul);
+    }
+    // スマホ・タブレット（説明の欄が地図の下にあるとき）：えらんだら、地図の下に「関係する物語・用語」へのボタンを出す
+    const narrow = () => window.matchMedia('(max-width: 900px)').matches;
+    function quickBar(s) {
+      let qb = $('.hm-quick', map.root);
+      if (!qb) {
+        qb = el('<div class="hm-quick" role="region" aria-label="関係する物語と用語"></div>');
+        qb.addEventListener('pointerdown', e => e.stopPropagation());
+        $('.hm-stage', map.root).appendChild(qb);
+      }
+      if (!s || story || !narrow()) { qb.hidden = true; return; }
+      const r = relatedOf(s);
+      if (!r.label) { qb.hidden = true; return; }
+      qb.hidden = false;
+      const short = t => (t.length > 16 ? t.slice(0, 15) + '…' : t);
+      qb.innerHTML = `<div class="q-head"><b>${esc(r.label)}</b><button type="button" class="q-x" aria-label="とじる">✕</button></div>`
+        + `<div class="q-row">${r.stories.slice(0, 2).map((st, k) => `<button type="button" class="chip q-st" data-k="${k}">▶ ${esc(short(st.title))}</button>`).join('')}`
+        + `${r.terms.slice(0, 2).map(termLink).join('')}<button type="button" class="chip q-more">説明・ほかの物語 ↓</button></div>`;
+      $$('.q-st', qb).forEach(b => b.addEventListener('click', () => { const st = r.stories[+b.dataset.k]; startStory(st, r.start.get(st) || 0); }));
+      $('.q-more', qb).addEventListener('click', () => { const side = $('.side', wrap); if (side) side.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+      $('.q-x', qb).addEventListener('click', () => { qb.hidden = true; });
     }
 
     function polityItem(p) {
@@ -219,6 +299,7 @@ registerTool('map', {
         <p>${linkTerms(pl.text || '')}</p>
         ${pl.fun ? `<div class="ev-fun">💡 <b>ここがおもしろい</b>　${esc(pl.fun)}</div>` : ''}
       </div>`));
+      relatedSection({ type: 'place', id: pl.id });
       body.appendChild(el('<h3>名前のうつりかわり（おすとその年へ）</h3>'));
       const ol = el('<ol class="places"></ol>');
       pl.names.forEach(n => {
@@ -260,6 +341,7 @@ registerTool('map', {
         ${p.tags ? `<div class="muted" style="font-size:12.5px">${p.tags.map(t => COURSE[t]).filter(Boolean).join('・')}</div>` : ''}
         ${figureHtml('polity:' + p.id, 2)}
       </div>`));
+      relatedSection({ type: 'polity', id: p.id });
       body.appendChild(jumpBtns([
         [`⏮ はじまり（${esc(yearLabel(p.start))}）`, () => map.setYear(p.start)],
         [`⏭ おわり（${esc(yearLabel(Math.min(p.end, YEAR_MAX)))}）`, () => map.setYear(Math.min(p.end, YEAR_MAX))]
@@ -317,6 +399,7 @@ registerTool('map', {
       pairs.push([`⏩ 足あとを年の順に動かす`, () => playLife(p)]);
       if (pol) pairs.push([`${esc(pol.name)}を見る`, () => map.select({ type: 'polity', id: pol.id })]);
       body.appendChild(jumpBtns(pairs));
+      relatedSection({ type: 'person', id: p.id });
       body.appendChild(el('<h3>足あと（おすとその年へ）</h3>'));
       const cur = GEO.placeAt(p, clamp(map.year, p.born, p.died));
       const ol = el('<ol class="places"></ol>');
@@ -360,6 +443,7 @@ registerTool('map', {
       body.appendChild(el(`<div>${figureHtml('event:' + e.title)}</div>`));
       if (EVENT_FUN[e.title]) body.appendChild(el(`<div class="ev-fun">💡 <b>ここがおもしろい</b>　${esc(EVENT_FUN[e.title])}</div>`));
       body.appendChild(jumpBtns([[`この年へ（${esc(yearLabel(e.year))}）`, () => map.setYear(e.year)]]));
+      relatedSection({ type: 'event', id: idx });
       whySection(idx);
       // その年に生きていた、近くの人物
       const near = PEOPLE.map(p => ({ p, pl: GEO.placeAt(p, e.year) })).filter(x => x.pl && d3.geoDistance([x.pl.lon, x.pl.lat], [e.lon, e.lat]) < 0.25);

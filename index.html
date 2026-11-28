@@ -551,6 +551,16 @@ button.chip[aria-pressed="true"], button.chip.on { background: var(--ink); color
 .prof-life b { min-width: 5.5em; }
 .pcard .pbadge { justify-self: start; font-size: 12px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 0 8px; background: var(--panel); }
 .p-fun ul { margin: 4px 0 0; padding-left: 1.2em; } .p-fun li { margin: 3px 0; }
+/* 地図でえらんだものの「関係する物語・用語」（スマホ・タブレットで地図の下に出る） */
+.hm-quick { position: absolute; left: 6px; right: 6px; bottom: 6px; z-index: 6; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 4px 8px 6px; box-shadow: 0 4px 16px rgba(0,0,0,.18); font-size: 13px; }
+.hm-quick[hidden] { display: none; }
+.hm-quick .q-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 2px; }
+.hm-quick .q-head b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-quick .q-x { border: 0; background: none; font-size: 16px; min-width: 32px; min-height: 32px; color: var(--muted); }
+.hm-quick .q-row { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.hm-quick .q-row::-webkit-scrollbar { display: none; }
+.hm-quick .q-row > * { flex: none; white-space: nowrap; }
+.hm-quick .chip { font-size: 12.5px; padding: 4px 10px; text-decoration: none; }
 .ev-fun { margin: 8px 0; padding: 8px 11px; border-radius: 10px; background: color-mix(in srgb, #e8b400 14%, var(--panel)); border: 1px solid color-mix(in srgb, #e8b400 45%, var(--line)); font-size: .95em; }
 @media (max-width: 640px) { .prof-head { flex-direction: column; text-align: center; } .prof-btns { justify-content: center; } }
 .lf { display: grid; gap: 5px; grid-template-columns: minmax(0, 1fr); }
